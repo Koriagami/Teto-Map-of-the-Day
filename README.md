@@ -14,10 +14,7 @@
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and set `DISCORD_TOKEN` and `CLIENT_ID` (application id).
-2. `npm install`
-3. `npm run deploy-commands` (registers global commands — can take up to 1 hour to propagate for global commands; for development use guild registration)
-4. `npm start`
+Click the link - https://discord.com/oauth2/authorize?client_id=1447929535466049657&permissions=388160&integration_type=0&scope=bot+applications.commands
 
 ## Files
 - `src/index.js` — main bot code
