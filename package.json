@@ -1,0 +1,19 @@
+{
+  "name": "teto-map-of-the-day",
+  "version": "1.0.0",
+  "description": "Discord bot: Teto Map of the Day - submit osu! maps and vote",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy-commands": "node src/deploy-commands.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "discord.js": "^14.11.0",
+    "node-cron": "^3.0.2",
+    "dotenv": "^16.3.1"
+  }
+}

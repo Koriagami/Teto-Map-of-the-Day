@@ -1,0 +1,5 @@
+node_modules/
+.env
+*.log
+teto_config.json
+teto_submissions.json
