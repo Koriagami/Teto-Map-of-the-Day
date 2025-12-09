@@ -2,6 +2,8 @@
 
 **Purpose:** Allow Discord users to submit their favourite osu! maps in a moderated environment.
 
+#### NOTE: This tool was "vibe coded" on the spot out of curiosity. All the code in this repo is 98% AI generated.
+
 ## Features
 - `/teto setup` (admin only) — set the operating channel (where submissions are posted)
 - `/teto map submit <maplink> [recommended_mod_1..5]` — submit a map (one submission per user per calendar date)
