@@ -71,11 +71,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   // /teto setup
   if (sub === 'setup') {
-    // only admins
-    const memberPerms = interaction.memberPermissions;
-    if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
-      return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
-    }
+    // DEBUG: admin check removed for testing
+    // const memberPerms = interaction.memberPermissions;
+    // if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
+    //   return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
+    // }
     serverConfig[guildId] = channel.id;
     saveJSON(CONFIG_PATH, serverConfig);
     return interaction.reply({ content: `Teto configured! Operating channel set to <#${channel.id}>.`, ephemeral: true });
@@ -163,7 +163,8 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     // count users who reacted with 👎 (includes bot if it reacted)
     const users = await reaction.users.fetch();
     const count = users.size;
-    if (count >= 4) {
+    // DEBUG: threshold reduced from 4 to 2 for testing
+    if (count >= 2) {
       // try to extract original submitter id from message start
       const matcher = msg.content.match(/^<@!?(\d+)>/);
       let uid = null;
