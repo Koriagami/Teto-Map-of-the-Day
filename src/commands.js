@@ -10,8 +10,8 @@ const mapSubmit = new SlashCommandBuilder()
       .setName('setup')
       .setDescription('Setup the bot in the current channel (admin only)')
   )
-  .addSubcommand(sub => {
-    const builder = sub
+  .addSubcommandGroup(group => {
+    const g = group
       .setName('map')
       .setDescription('OSU map tools')
       .addSubcommand(sc => {
@@ -35,7 +35,7 @@ const mapSubmit = new SlashCommandBuilder()
         }
         return s;
       });
-    return builder;
+    return g;
   });
 
 export const commands = [mapSubmit.toJSON()];
