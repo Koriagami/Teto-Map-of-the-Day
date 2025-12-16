@@ -27,8 +27,9 @@ Railway automatically shares environment variables between services in the same 
 
 2. **Check Variables Tab**
    - Go to **"Variables"** tab
-   - You should see `DATABASE_URL` automatically added
+   - You should see `DATABASE_URL` automatically added (this is the **private endpoint** - no egress fees)
    - It should look like: `postgresql://postgres:password@hostname:port/railway`
+   - **Important:** Use `DATABASE_URL` (private), NOT `DATABASE_PUBLIC_URL` (public - incurs egress fees)
    - **You don't need to copy this manually** - Railway handles it!
 
 3. **Verify Connection**
@@ -36,6 +37,11 @@ Railway automatically shares environment variables between services in the same 
      - Both services are in the same Railway project
      - PostgreSQL service is running (green status)
      - Wait a minute and refresh
+
+4. **Avoid Egress Fees**
+   - Railway may show a warning about `DATABASE_PUBLIC_URL` - **ignore this**
+   - We use `DATABASE_URL` which is the private endpoint (no fees)
+   - Only use `DATABASE_PUBLIC_URL` if you need to connect from outside Railway
 
 ## Step 3: Install Dependencies Locally
 
@@ -160,6 +166,15 @@ Then expose port 5555 in Railway to access it via browser.
 - Check Railway deployment logs for errors
 - Verify `DATABASE_URL` is correct in Railway variables
 
+### "DATABASE_PUBLIC_URL warning about egress fees"
+
+**Solution:**
+- ✅ **This warning is safe to ignore!**
+- We use `DATABASE_URL` (private endpoint), not `DATABASE_PUBLIC_URL` (public endpoint)
+- The warning appears because Railway creates both variables, but we only use the private one
+- As long as your code uses `DATABASE_URL` (which it does), you won't incur egress fees
+- You can safely ignore this warning or hide `DATABASE_PUBLIC_URL` if it bothers you
+
 ## Benefits of PostgreSQL on Railway
 
 ✅ **Persistent** - Data survives redeployments  
@@ -168,6 +183,23 @@ Then expose port 5555 in Railway to access it via browser.
 ✅ **Backups** - Railway handles backups automatically  
 ✅ **Production Ready** - Proper database for production use  
 ✅ **Accessible** - Easy to view and manage data via Railway dashboard  
+✅ **No Egress Fees** - Using private `DATABASE_URL` endpoint (services in same project)
+
+## About Database URLs
+
+Railway provides two database connection URLs:
+
+- **`DATABASE_URL`** (Private) - ✅ **Use this one!**
+  - Private endpoint for services in the same Railway project
+  - **No egress fees**
+  - This is what we use in `prisma/schema.prisma`
+
+- **`DATABASE_PUBLIC_URL`** (Public) - ⚠️ **Don't use this**
+  - Public endpoint for external connections
+  - **Incurs egress fees**
+  - Only use if connecting from outside Railway
+
+**Our code uses `DATABASE_URL` (private), so you won't incur egress fees!**  
 
 ## Local Development (Optional)
 
