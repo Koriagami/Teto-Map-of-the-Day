@@ -6,4 +6,5 @@ teto_submissions.json
 teto_associations.json
 *.db
 *.db-journal
-prisma/migrations/
+# Keep migrations in git - they need to be deployed
+# prisma/migrations/
