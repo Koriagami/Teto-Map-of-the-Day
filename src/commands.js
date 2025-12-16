@@ -38,4 +38,22 @@ const mapSubmit = new SlashCommandBuilder()
     return g;
   });
 
-export const commands = [mapSubmit.toJSON()];
+const testCommand = new SlashCommandBuilder()
+  .setName('test')
+  .setDescription('Test OSU! API - Get leaderboard scores for a beatmap')
+  .addStringOption(opt =>
+    opt
+      .setName('maplink')
+      .setDescription('OSU! beatmap link or beatmap ID')
+      .setRequired(true)
+  )
+  .addIntegerOption(opt =>
+    opt
+      .setName('limit')
+      .setDescription('Number of scores to retrieve (default: 10, max: 100)')
+      .setRequired(false)
+      .setMinValue(1)
+      .setMaxValue(100)
+  );
+
+export const commands = [mapSubmit.toJSON(), testCommand.toJSON()];
