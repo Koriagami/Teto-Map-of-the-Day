@@ -3,3 +3,4 @@ node_modules/
 *.log
 teto_config.json
 teto_submissions.json
+teto_associations.json

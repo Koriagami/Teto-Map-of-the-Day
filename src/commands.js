@@ -10,6 +10,17 @@ const mapSubmit = new SlashCommandBuilder()
       .setName('setup')
       .setDescription('Setup the bot in the current channel (admin only)')
   )
+  .addSubcommand(sub =>
+    sub
+      .setName('link')
+      .setDescription('Link your Discord account to your OSU! profile')
+      .addStringOption(opt =>
+        opt
+          .setName('profilelink')
+          .setDescription('Link to your OSU! profile')
+          .setRequired(true)
+      )
+  )
   .addSubcommandGroup(group => {
     const g = group
       .setName('map')

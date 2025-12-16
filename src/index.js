@@ -14,6 +14,7 @@ import { extractBeatmapId, getBeatmap, getBeatmapScores } from './osu-api.js';
 // Config paths
 const CONFIG_PATH = path.resolve('./teto_config.json');
 const SUBMISSION_PATH = path.resolve('./teto_submissions.json');
+const ASSOCIATION_PATH = path.resolve('./teto_associations.json');
 
 // Load or initialize persistent JSON files
 function loadJSON(p, fallback) {
@@ -30,6 +31,7 @@ function saveJSON(p, data) {
 // Persistent storage
 let serverConfig = loadJSON(CONFIG_PATH, {}); // guildId -> operatingChannelId
 let lastSubmission = loadJSON(SUBMISSION_PATH, {}); // key: `${guildId}:${userId}` -> YYYY-MM-DD
+let userAssociations = loadJSON(ASSOCIATION_PATH, {}); // key: `${guildId}:${userId}` -> { osuUsername, osuUserId, profileLink }
 
 const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
 
@@ -53,6 +55,43 @@ if (!TOKEN) {
 function todayString() {
   const now = new Date();
   return now.toISOString().split('T')[0];
+}
+
+// Helper: extract OSU username/user ID from profile link
+function extractOsuProfile(profileLink) {
+  if (!profileLink) return null;
+
+  // Try /users/{id} format
+  const usersMatch = profileLink.match(/osu\.ppy\.sh\/users\/(\d+)/);
+  if (usersMatch) {
+    return { userId: usersMatch[1], username: null, profileLink };
+  }
+
+  // Try /users/{username} format
+  const usernameMatch = profileLink.match(/osu\.ppy\.sh\/users\/([^\/\?#]+)/);
+  if (usernameMatch) {
+    return { userId: null, username: usernameMatch[1], profileLink };
+  }
+
+  // Try /u/{id} format
+  const uMatch = profileLink.match(/osu\.ppy\.sh\/u\/(\d+)/);
+  if (uMatch) {
+    return { userId: uMatch[1], username: null, profileLink };
+  }
+
+  // Try /u/{username} format
+  const uUsernameMatch = profileLink.match(/osu\.ppy\.sh\/u\/([^\/\?#]+)/);
+  if (uUsernameMatch) {
+    return { userId: null, username: uUsernameMatch[1], profileLink };
+  }
+
+  // If it's just a username (no URL), assume it's a username
+  const justUsername = profileLink.trim();
+  if (justUsername && !justUsername.includes('http') && !justUsername.includes('/')) {
+    return { userId: null, username: justUsername, profileLink: `https://osu.ppy.sh/users/${justUsername}` };
+  }
+
+  return null;
 }
 
 // When ready
@@ -145,6 +184,36 @@ client.on(Events.InteractionCreate, async (interaction) => {
     serverConfig[guildId] = channel.id;
     saveJSON(CONFIG_PATH, serverConfig);
     return interaction.reply({ content: `Teto configured! Operating channel set to <#${channel.id}>.`, ephemeral: true });
+  }
+
+  // /teto link
+  if (sub === 'link') {
+    const profileLink = interaction.options.getString('profilelink');
+    const profileInfo = extractOsuProfile(profileLink);
+
+    if (!profileInfo) {
+      return interaction.reply({ 
+        content: 'Invalid OSU! profile link. Please provide a valid link like:\n- https://osu.ppy.sh/users/12345\n- https://osu.ppy.sh/users/username\n- Or just your username', 
+        ephemeral: true 
+      });
+    }
+
+    const key = `${guildId}:${interaction.user.id}`;
+    userAssociations[key] = {
+      osuUsername: profileInfo.username,
+      osuUserId: profileInfo.userId,
+      profileLink: profileInfo.profileLink,
+      linkedAt: new Date().toISOString(),
+      discordUserId: interaction.user.id,
+      discordUsername: interaction.user.username,
+    };
+    saveJSON(ASSOCIATION_PATH, userAssociations);
+
+    const displayName = profileInfo.username || `User ${profileInfo.userId}`;
+    return interaction.reply({ 
+      content: `✅ Successfully linked your Discord account to OSU! profile: **${displayName}**\nProfile: ${profileInfo.profileLink}`, 
+      ephemeral: true 
+    });
   }
 
   // /teto map submit
