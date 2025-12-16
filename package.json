@@ -1,7 +1,7 @@
 {
-  "name": "teto-map-of-the-day",
+  "name": "teto-bot",
   "version": "1.0.0",
-  "description": "Discord bot: Teto Map of the Day - submit osu! maps and vote",
+  "description": "Discord bot: Teto Bot - submit osu! maps and vote",
   "main": "src/index.js",
   "type": "module",
   "scripts": {

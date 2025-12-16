@@ -1,4 +1,4 @@
-# Teto Map of the Day - Discord Bot
+# Teto Bot - Discord Bot
 
 **Purpose:** Allow Discord users to submit their favourite osu! maps in a moderated environment.
 

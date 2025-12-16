@@ -1,4 +1,4 @@
-// Prisma schema for Teto Map of the Day bot
+// Prisma schema for Teto Bot
 // Configured for PostgreSQL (Railway)
 
 generator client {
