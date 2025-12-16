@@ -93,13 +93,18 @@ railway link
 railway run npx prisma migrate deploy
 ```
 
-### Option B: Using Railway Dashboard
+### Option B: Using Railway Dashboard (Easiest)
 
-1. Go to your **bot service** (not PostgreSQL)
-2. Click **"Deployments"** tab
-3. Click on the **latest deployment**
-4. Click **"View Logs"** → **"Shell"** tab
-5. Run: `npx prisma migrate deploy`
+1. Go to your **bot service** (not PostgreSQL) in Railway dashboard
+2. Click on the **"Deployments"** tab
+3. Click on the **latest deployment** (most recent one)
+4. You'll see a **"Shell"** button/tab - click it
+5. This opens an interactive terminal/shell
+6. Run: `npx prisma migrate deploy`
+
+**Alternative path:**
+- Go to your service → Click **"View Logs"** → Look for **"Shell"** tab
+- Or click the **terminal icon** if visible in the service view
 
 This will:
 - Create all tables in Railway's PostgreSQL database

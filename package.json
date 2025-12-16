@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
+    "postinstall": "prisma generate",
+    "start": "prisma migrate deploy && node src/index.js",
     "deploy-commands": "node src/deploy-commands.js",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
