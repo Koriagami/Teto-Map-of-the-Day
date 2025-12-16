@@ -10,7 +10,7 @@
 - `/test <maplink> [limit]` — test OSU! API - get leaderboard scores for a beatmap
 - Bot posts submission in the operating channel and adds 👍 and 👎 reactions
 - If 👎 reaches 4 (including bot), the post is edited to the "meh" message
-- Persistence via JSON files
+- Persistence via PostgreSQL database (Prisma ORM)
 - Automatic daily reset at midnight (server time)
 - OSU! API v2 integration for fetching beatmap leaderboards
 
@@ -25,7 +25,10 @@ DISCORD_TOKEN=your_discord_bot_token
 CLIENT_ID=your_discord_application_id
 OSU_CLIENT_ID=your_osu_oauth_client_id
 OSU_CLIENT_SECRET=your_osu_oauth_client_secret
+DATABASE_URL=postgresql://user:password@localhost:5432/teto_db
 ```
+
+**Note:** For Railway deployment, `DATABASE_URL` is automatically set when you add a PostgreSQL service.
 
 ### Getting OSU! API Credentials
 
@@ -40,17 +43,35 @@ OSU_CLIENT_SECRET=your_osu_oauth_client_secret
 ### Installation
 
 1. `npm install`
-2. `npm run deploy-commands` (registers slash commands)
-3. `npm start`
+2. `npm run db:generate` (generate Prisma client)
+3. `npm run db:migrate` (create database and tables - for local development)
+4. `npm run deploy-commands` (registers slash commands)
+5. `npm start`
+
+**For Railway deployment:** See [RAILWAY_SETUP.md](./RAILWAY_SETUP.md) for PostgreSQL setup instructions.
 
 ## Files
 - `src/index.js` — main bot code
 - `src/commands.js` — slash command definitions
 - `src/deploy-commands.js` — helper to deploy commands
 - `src/osu-api.js` — OSU! API v2 client with OAuth2 authentication
-- `teto_config.json` — created automatically to store operating channel per guild
-- `teto_submissions.json` — created automatically to store last submission dates per user/guild
+- `src/db.js` — database operations using Prisma
+- `prisma/schema.prisma` — database schema definition (PostgreSQL)
+
+## Database
+
+This bot uses **PostgreSQL** with **Prisma ORM** for data persistence:
+- **Server Configs** — operating channels per guild
+- **Submissions** — user submission tracking
+- **User Associations** — Discord to OSU profile links
+
+### Viewing Database
+
+- **Railway:** Use Railway's built-in PostgreSQL data viewer
+- **Local:** Run `npm run db:studio` to open Prisma Studio
+- **CLI:** Use `psql` or any PostgreSQL client
 
 ## Notes
 - This project uses Node ESM modules.
-- For production, replace JSON persistence with a proper database.
+- Database: PostgreSQL with Prisma ORM (configured for Railway)
+- Use `npm run db:studio` to open Prisma Studio for database management

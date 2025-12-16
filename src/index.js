@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import 'dotenv/config';
 import {
   Client,
@@ -10,28 +8,7 @@ import {
 } from 'discord.js';
 import { commands } from './commands.js';
 import { extractBeatmapId, getBeatmap, getBeatmapScores } from './osu-api.js';
-
-// Config paths
-const CONFIG_PATH = path.resolve('./teto_config.json');
-const SUBMISSION_PATH = path.resolve('./teto_submissions.json');
-const ASSOCIATION_PATH = path.resolve('./teto_associations.json');
-
-// Load or initialize persistent JSON files
-function loadJSON(p, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch {
-    return fallback;
-  }
-}
-function saveJSON(p, data) {
-  fs.writeFileSync(p, JSON.stringify(data, null, 2));
-}
-
-// Persistent storage
-let serverConfig = loadJSON(CONFIG_PATH, {}); // guildId -> operatingChannelId
-let lastSubmission = loadJSON(SUBMISSION_PATH, {}); // key: `${guildId}:${userId}` -> YYYY-MM-DD
-let userAssociations = loadJSON(ASSOCIATION_PATH, {}); // key: `${guildId}:${userId}` -> { osuUsername, osuUserId, profileLink }
+import { serverConfig as dbServerConfig, submissions, associations, disconnect } from './db.js';
 
 const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
 
@@ -181,8 +158,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
     }
-    serverConfig[guildId] = channel.id;
-    saveJSON(CONFIG_PATH, serverConfig);
+    await dbServerConfig.set(guildId, channel.id);
     return interaction.reply({ content: `Teto configured! Operating channel set to <#${channel.id}>.`, ephemeral: true });
   }
 
@@ -198,16 +174,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
     }
 
-    const key = `${guildId}:${interaction.user.id}`;
-    userAssociations[key] = {
+    await associations.set(guildId, interaction.user.id, {
+      discordUsername: interaction.user.username,
       osuUsername: profileInfo.username,
       osuUserId: profileInfo.userId,
       profileLink: profileInfo.profileLink,
-      linkedAt: new Date().toISOString(),
-      discordUserId: interaction.user.id,
-      discordUsername: interaction.user.username,
-    };
-    saveJSON(ASSOCIATION_PATH, userAssociations);
+    });
 
     const displayName = profileInfo.username || `User ${profileInfo.userId}`;
     return interaction.reply({ 
@@ -222,15 +194,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!mapLink || !mapLink.includes('osu.ppy.sh')) {
       return interaction.reply({ content: "Impossible to submit the map - link doesn't contain OSU! map", ephemeral: true });
     }
-    const opChannelId = serverConfig[guildId];
+    const opChannelId = await dbServerConfig.get(guildId);
     if (!opChannelId) {
       return interaction.reply({ content: 'Teto is not set up yet. Ask an admin to use /teto setup.', ephemeral: true });
     }
 
-    const key = `${guildId}:${interaction.user.id}`;
-    const last = lastSubmission[key];
     const today = todayString();
-    if (last === today) {
+    const hasSubmitted = await submissions.hasSubmittedToday(guildId, interaction.user.id, today);
+    if (hasSubmitted) {
       return interaction.reply({ content: 'You already submitted a map today!', ephemeral: true });
     }
 
@@ -268,8 +239,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         console.warn('Failed to add reactions to submission (non-critical):', reactErr);
       }
       // store submission
-      lastSubmission[key] = today;
-      saveJSON(SUBMISSION_PATH, lastSubmission);
+      await submissions.create(guildId, interaction.user.id, today);
       return interaction.reply({ content: `Map submitted to <#${opChannelId}>!`, ephemeral: true });
     } catch (err) {
       console.error('Failed to post submission:', err);
@@ -322,7 +292,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
 // DAILY RESET: clean up old submission entries at midnight UTC
 // We'll use a minute-based checker to detect when hour=0 and minute=0 (UTC)
 let lastResetDate = null;
-setInterval(() => {
+setInterval(async () => {
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
   const h = now.getUTCHours();
@@ -330,20 +300,29 @@ setInterval(() => {
   if (h === 0 && m === 0 && lastResetDate !== dateStr) {
     // Only remove entries that are not from today (cleanup old data)
     const today = dateStr;
-    const keys = Object.keys(lastSubmission);
-    let cleaned = false;
-    for (const key of keys) {
-      if (lastSubmission[key] !== today) {
-        delete lastSubmission[key];
-        cleaned = true;
+    try {
+      const result = await submissions.deleteOldEntries(today);
+      if (result.count > 0) {
+        console.log(`Daily submission limits reset - ${result.count} old entries cleaned.`);
       }
-    }
-    if (cleaned) {
-      saveJSON(SUBMISSION_PATH, lastSubmission);
-      console.log('Daily submission limits reset - old entries cleaned.');
+    } catch (error) {
+      console.error('Error cleaning old submissions:', error);
     }
     lastResetDate = dateStr;
   }
 }, 60 * 1000); // every minute
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('Shutting down gracefully...');
+  await disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Shutting down gracefully...');
+  await disconnect();
+  process.exit(0);
+});
 
 client.login(TOKEN);

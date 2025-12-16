@@ -4,3 +4,6 @@ node_modules/
 teto_config.json
 teto_submissions.json
 teto_associations.json
+*.db
+*.db-journal
+prisma/migrations/

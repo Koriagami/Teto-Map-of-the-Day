@@ -1,0 +1,51 @@
+// Prisma schema for Teto Map of the Day bot
+// Configured for PostgreSQL (Railway)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ServerConfig {
+  id                String   @id @default(uuid())
+  guildId           String   @unique
+  operatingChannelId String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("server_configs")
+}
+
+model Submission {
+  id             String   @id @default(uuid())
+  guildId        String
+  userId         String
+  submissionDate String   // YYYY-MM-DD format
+  createdAt      DateTime @default(now())
+
+  @@unique([guildId, userId, submissionDate])
+  @@index([guildId, userId])
+  @@map("submissions")
+}
+
+model UserAssociation {
+  id              String   @id @default(uuid())
+  guildId         String
+  discordUserId   String
+  discordUsername String
+  osuUsername     String?
+  osuUserId       String?
+  profileLink     String
+  linkedAt        DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([guildId, discordUserId])
+  @@index([guildId, discordUserId])
+  @@index([osuUserId])
+  @@index([osuUsername])
+  @@map("user_associations")
+}
