@@ -67,4 +67,14 @@ const testCommand = new SlashCommandBuilder()
       .setMaxValue(100)
   );
 
-export const commands = [mapSubmit.toJSON(), testCommand.toJSON()];
+const rscCommand = new SlashCommandBuilder()
+  .setName('rsc')
+  .setDescription('Issue or respond to a score challenge')
+  .addStringOption(opt =>
+    opt
+      .setName('respond_for_map_link')
+      .setDescription('Link to OSU! beatmap to respond to challenge (must contain osu.ppy.sh)')
+      .setRequired(false)
+  );
+
+export const commands = [mapSubmit.toJSON(), testCommand.toJSON(), rscCommand.toJSON()];

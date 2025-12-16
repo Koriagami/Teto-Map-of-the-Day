@@ -49,3 +49,19 @@ model UserAssociation {
   @@index([osuUsername])
   @@map("user_associations")
 }
+
+model ActiveChallenge {
+  id                String   @id @default(uuid())
+  guildId           String
+  beatmapId         String
+  difficulty        String   // beatmap version/difficulty name
+  challengerUserId  String   // Discord user ID who issued the challenge
+  challengerOsuId   String   // OSU user ID
+  challengerScore   Json     // Full score data from OSU API
+  createdAt         DateTime @default(now())
+
+  @@unique([guildId, beatmapId, difficulty])
+  @@index([guildId])
+  @@index([beatmapId])
+  @@map("active_challenges")
+}

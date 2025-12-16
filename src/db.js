@@ -144,6 +144,52 @@ export const associations = {
   },
 };
 
+// Active Challenge operations
+export const activeChallenges = {
+  async getByDifficulty(guildId, beatmapId, difficulty) {
+    return prisma.activeChallenge.findUnique({
+      where: {
+        guildId_beatmapId_difficulty: {
+          guildId,
+          beatmapId,
+          difficulty,
+        },
+      },
+    });
+  },
+
+  async create(guildId, beatmapId, difficulty, challengerUserId, challengerOsuId, challengerScore) {
+    return prisma.activeChallenge.create({
+      data: {
+        guildId,
+        beatmapId,
+        difficulty,
+        challengerUserId,
+        challengerOsuId,
+        challengerScore,
+      },
+    });
+  },
+
+  async delete(guildId, beatmapId, difficulty) {
+    return prisma.activeChallenge.delete({
+      where: {
+        guildId_beatmapId_difficulty: {
+          guildId,
+          beatmapId,
+          difficulty,
+        },
+      },
+    }).catch(() => null); // Ignore if not found
+  },
+
+  async getAll(guildId) {
+    return prisma.activeChallenge.findMany({
+      where: { guildId },
+    });
+  },
+};
+
 // Cleanup function for graceful shutdown
 export async function disconnect() {
   await prisma.$disconnect();

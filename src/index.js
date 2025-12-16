@@ -7,8 +7,8 @@ import {
   PermissionsBitField,
 } from 'discord.js';
 import { commands } from './commands.js';
-import { extractBeatmapId, getBeatmap, getBeatmapScores } from './osu-api.js';
-import { serverConfig as dbServerConfig, submissions, associations, disconnect } from './db.js';
+import { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore } from './osu-api.js';
+import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, disconnect } from './db.js';
 
 const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
 
@@ -32,6 +32,65 @@ if (!TOKEN) {
 function todayString() {
   const now = new Date();
   return now.toISOString().split('T')[0];
+}
+
+// Helper: compare two scores and format comparison table
+function compareScores(challengerScore, responderScore, responderUsername) {
+  const challengerUsername = challengerScore.user?.username || 'Challenger';
+  const responderName = responderUsername;
+
+  // Extract stats
+  const challengerPP = challengerScore.pp || 0;
+  const responderPP = responderScore.pp || 0;
+  const challengerAcc = (challengerScore.accuracy || 0) * 100;
+  const responderAcc = (responderScore.accuracy || 0) * 100;
+  const challengerCombo = challengerScore.max_combo || 0;
+  const responderCombo = responderScore.max_combo || 0;
+  const challengerScoreValue = challengerScore.score || 0;
+  const responderScoreValue = responderScore.score || 0;
+  
+  const challenger300 = challengerScore.statistics?.count_300 || 0;
+  const responder300 = responderScore.statistics?.count_300 || 0;
+  const challenger100 = challengerScore.statistics?.count_100 || 0;
+  const responder100 = responderScore.statistics?.count_100 || 0;
+  const challenger50 = challengerScore.statistics?.count_50 || 0;
+  const responder50 = responderScore.statistics?.count_50 || 0;
+  const challengerMiss = challengerScore.statistics?.count_miss || 0;
+  const responderMiss = responderScore.statistics?.count_miss || 0;
+
+  // Determine winners
+  const ppWinner = responderPP > challengerPP ? responderName : (responderPP < challengerPP ? challengerUsername : 'Tie');
+  const accWinner = responderAcc > challengerAcc ? responderName : (responderAcc < challengerAcc ? challengerUsername : 'Tie');
+  const comboWinner = responderCombo > challengerCombo ? responderName : (responderCombo < challengerCombo ? challengerUsername : 'Tie');
+  const scoreWinner = responderScoreValue > challengerScoreValue ? responderName : (responderScoreValue < challengerScoreValue ? challengerUsername : 'Tie');
+  const missWinner = responderMiss < challengerMiss ? responderName : (responderMiss > challengerMiss ? challengerUsername : 'Tie');
+
+  // Format comparison table
+  let table = '```\n';
+  table += 'Stat              | Challenger          | Responder\n';
+  table += '------------------|---------------------|-------------------\n';
+  table += `PP                | ${challengerPP.toFixed(2).padStart(17)} ${responderPP < challengerPP ? '🏆' : ''} | ${responderPP.toFixed(2).padStart(17)} ${responderPP > challengerPP ? '🏆' : ''}\n`;
+  table += `Accuracy          | ${challengerAcc.toFixed(2).padStart(16)}% ${responderAcc < challengerAcc ? '🏆' : ''} | ${responderAcc.toFixed(2).padStart(16)}% ${responderAcc > challengerAcc ? '🏆' : ''}\n`;
+  table += `Max Combo         | ${challengerCombo.toString().padStart(17)} ${responderCombo < challengerCombo ? '🏆' : ''} | ${responderCombo.toString().padStart(17)} ${responderCombo > challengerCombo ? '🏆' : ''}\n`;
+  table += `Score             | ${challengerScoreValue.toLocaleString().padStart(17)} ${responderScoreValue < challengerScoreValue ? '🏆' : ''} | ${responderScoreValue.toLocaleString().padStart(17)} ${responderScoreValue > challengerScoreValue ? '🏆' : ''}\n`;
+  table += `300s              | ${challenger300.toString().padStart(17)} ${responder300 < challenger300 ? '🏆' : ''} | ${responder300.toString().padStart(17)} ${responder300 > challenger300 ? '🏆' : ''}\n`;
+  table += `100s              | ${challenger100.toString().padStart(17)} ${responder100 > challenger100 ? '🏆' : ''} | ${responder100.toString().padStart(17)} ${responder100 < challenger100 ? '🏆' : ''}\n`;
+  table += `50s               | ${challenger50.toString().padStart(17)} ${responder50 > challenger50 ? '🏆' : ''} | ${responder50.toString().padStart(17)} ${responder50 < challenger50 ? '🏆' : ''}\n`;
+  table += `Misses            | ${challengerMiss.toString().padStart(17)} ${responderMiss > challengerMiss ? '🏆' : ''} | ${responderMiss.toString().padStart(17)} ${responderMiss < challengerMiss ? '🏆' : ''}\n`;
+  table += '```\n\n';
+
+  // Summary
+  let challengerWins = 0;
+  let responderWins = 0;
+  if (ppWinner === challengerUsername) challengerWins++; else if (ppWinner === responderName) responderWins++;
+  if (accWinner === challengerUsername) challengerWins++; else if (accWinner === responderName) responderWins++;
+  if (comboWinner === challengerUsername) challengerWins++; else if (comboWinner === responderName) responderWins++;
+  if (scoreWinner === challengerUsername) challengerWins++; else if (scoreWinner === responderName) responderWins++;
+  if (missWinner === challengerUsername) challengerWins++; else if (missWinner === responderName) responderWins++;
+
+  table += `**Winner:** ${responderWins > challengerWins ? responderName : responderWins < challengerWins ? challengerUsername : 'Tie'} (${Math.max(responderWins, challengerWins)}/${challengerWins + responderWins} stats)`;
+
+  return table;
 }
 
 // Helper: extract OSU username/user ID from profile link
@@ -139,6 +198,214 @@ client.on(Events.InteractionCreate, async (interaction) => {
       console.error('Error in /test command:', error);
       return interaction.editReply({ 
         content: `Error fetching leaderboard: ${error.message}\n\nMake sure OSU_CLIENT_ID and OSU_CLIENT_SECRET are set in your .env file.` 
+      });
+    }
+  }
+
+  // Handle /rsc command
+  if (interaction.commandName === 'rsc') {
+    await interaction.deferReply({ ephemeral: false });
+
+    try {
+      const guildId = interaction.guildId;
+      const userId = interaction.user.id;
+      const respondForMapLink = interaction.options.getString('respond_for_map_link');
+
+      // Check if user has association
+      const association = await associations.get(guildId, userId);
+      if (!association || !association.osuUserId) {
+        return interaction.editReply({ 
+          content: 'You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.',
+          ephemeral: true 
+        });
+      }
+
+      const osuUserId = association.osuUserId;
+      let beatmapId, difficulty, userScore, existingChallenge;
+
+      // PART A: Issuing a challenge
+      if (!respondForMapLink) {
+        // Get most recent score
+        const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
+        // OSU API returns array directly for user scores
+        const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
+        
+        if (!recentScores || recentScores.length === 0) {
+          return interaction.editReply({ 
+            content: 'You have no recent scores. Play a map first!',
+            ephemeral: true 
+          });
+        }
+
+        userScore = recentScores[0];
+        beatmapId = userScore.beatmap?.id?.toString();
+        difficulty = userScore.beatmap?.version || 'Unknown';
+
+        if (!beatmapId) {
+          return interaction.editReply({ 
+            content: 'Could not determine beatmap from your recent score.',
+            ephemeral: true 
+          });
+        }
+
+        // Check if challenge already exists
+        existingChallenge = await activeChallenges.getByDifficulty(guildId, beatmapId, difficulty);
+        
+        if (existingChallenge) {
+          // Challenge exists, proceed to PART B
+          await interaction.editReply({ 
+            content: 'There is already an active challenge for this diff.\nORA ORA! WE ARE ENTERING THE COMPETITION!'
+          });
+          // Continue to PART B below
+        } else {
+          // Create new challenge
+          await activeChallenges.create(
+            guildId,
+            beatmapId,
+            difficulty,
+            userId,
+            osuUserId,
+            userScore
+          );
+
+          // Get operating channel
+          const opChannelId = await dbServerConfig.get(guildId);
+          if (!opChannelId) {
+            return interaction.editReply({ 
+              content: 'Teto is not set up yet. Ask an admin to use /teto setup.',
+              ephemeral: true 
+            });
+          }
+
+          const guild = interaction.guild;
+          const opChannel = await guild.channels.fetch(opChannelId);
+          
+          if (!opChannel) {
+            return interaction.editReply({ 
+              content: 'Operating channel is invalid. Re-run setup.',
+              ephemeral: true 
+            });
+          }
+
+          // Post challenge in operating channel
+          const challengeMessage = `<@${userId}> has issued a challenge for the **${difficulty}**!\nBeat the score below and use \`/rsc\` command to respond!`;
+          await opChannel.send(challengeMessage);
+
+          return interaction.editReply({ 
+            content: `Challenge issued for **${difficulty}**! Check the operating channel.`
+          });
+        }
+      } else {
+        // With param - check if link contains osu.ppy.sh
+        if (!respondForMapLink.includes('osu.ppy.sh')) {
+          return interaction.editReply({ 
+            content: 'Invalid map link. The link must contain "osu.ppy.sh".',
+            ephemeral: true 
+          });
+        }
+
+        beatmapId = extractBeatmapId(respondForMapLink);
+        if (!beatmapId) {
+          return interaction.editReply({ 
+            content: 'Could not extract beatmap ID from the link.',
+            ephemeral: true 
+          });
+        }
+
+        // Check if user has score for this beatmap
+        userScore = await getUserBeatmapScore(beatmapId, osuUserId);
+        if (!userScore) {
+          return interaction.editReply({ 
+            content: 'You have no score for this beatmap. Play it first!',
+            ephemeral: true 
+          });
+        }
+
+        difficulty = userScore.beatmap?.version || 'Unknown';
+
+        // Check if challenge exists
+        existingChallenge = await activeChallenges.getByDifficulty(guildId, beatmapId, difficulty);
+        
+        if (!existingChallenge) {
+          // Create new challenge
+          await activeChallenges.create(
+            guildId,
+            beatmapId,
+            difficulty,
+            userId,
+            osuUserId,
+            userScore
+          );
+
+          // Get operating channel
+          const opChannelId = await dbServerConfig.get(guildId);
+          if (!opChannelId) {
+            return interaction.editReply({ 
+              content: 'Teto is not set up yet. Ask an admin to use /teto setup.',
+              ephemeral: true 
+            });
+          }
+
+          const guild = interaction.guild;
+          const opChannel = await guild.channels.fetch(opChannelId);
+          
+          if (!opChannel) {
+            return interaction.editReply({ 
+              content: 'Operating channel is invalid. Re-run setup.',
+              ephemeral: true 
+            });
+          }
+
+          // Post challenge in operating channel
+          const challengeMessage = `<@${userId}> has issued a challenge for the **${difficulty}**!\nBeat the score below and use \`/rsc\` command to respond!`;
+          await opChannel.send(challengeMessage);
+
+          return interaction.editReply({ 
+            content: 'Huh? Looks like we are uncontested on this diff! COME AND CHALLENGE US!'
+          });
+        } else {
+          // Challenge exists, proceed to PART B
+          await interaction.editReply({ 
+            content: 'ORA ORA! WE ARE ENTERING THE COMPETITION!'
+          });
+          // Continue to PART B below
+        }
+      }
+
+      // PART B: Responding to challenge
+      // At this point, we have existingChallenge and we need to compare scores
+      if (!existingChallenge) {
+        return interaction.editReply({ 
+          content: 'No active challenge found. This should not happen.',
+          ephemeral: true 
+        });
+      }
+
+      // Get responder's score (use the score we already fetched)
+      const responderScore = userScore;
+
+      if (!responderScore) {
+        return interaction.editReply({ 
+          content: 'Could not find your score for this beatmap.',
+          ephemeral: true 
+        });
+      }
+
+      const challengerScore = existingChallenge.challengerScore;
+      const challengeDifficulty = existingChallenge.difficulty;
+
+      // Compare scores and create comparison table
+      const comparison = compareScores(challengerScore, responderScore, interaction.user.username);
+
+      const responseMessage = `<@${userId}> has responded to the challenge on the **${challengeDifficulty}**!\nLet's see who is better!\n\n${comparison}`;
+
+      return interaction.editReply({ content: responseMessage });
+
+    } catch (error) {
+      console.error('Error in /rsc command:', error);
+      return interaction.editReply({ 
+        content: `Error: ${error.message}`,
+        ephemeral: true 
       });
     }
   }
