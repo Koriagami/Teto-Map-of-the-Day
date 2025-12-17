@@ -56,3 +56,4 @@ CREATE INDEX "user_associations_osuUserId_idx" ON "user_associations"("osuUserId
 -- CreateIndex
 CREATE INDEX "user_associations_osuUsername_idx" ON "user_associations"("osuUsername");
 
+
