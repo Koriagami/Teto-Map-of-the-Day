@@ -271,8 +271,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
         
         if (existingChallenge) {
           // Challenge exists, proceed to PART B
+          const mapTitle = await getMapTitle(userScore);
+          const difficultyLabel = `${mapTitle} [${difficulty}]`;
           await interaction.editReply({ 
-            content: 'There is already an active challenge for this diff.\nORA ORA! WE ARE ENTERING THE COMPETITION!'
+            content: `There is already an active challenge for **${difficultyLabel}**.\nORA ORA! WE ARE ENTERING THE COMPETITION!`
           });
           // Continue to PART B below
         } else {
@@ -353,7 +355,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           await interaction.channel.send(challengeMessage);
 
           return interaction.editReply({ 
-            content: 'Huh? Looks like we are uncontested on this diff! COME AND CHALLENGE US!'
+            content: `Huh? Looks like we are uncontested on **${difficultyLabel}**! COME AND CHALLENGE US!`
           });
         } else {
           // Challenge exists, proceed to PART B
@@ -397,6 +399,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
+      // Get map title and format difficulty label
+      const mapTitle = await getMapTitle(challengerScore);
+      const difficultyLabel = `${mapTitle} [${challengeDifficulty}]`;
+
       // Compare scores and create comparison table
       let comparison;
       try {
@@ -409,7 +415,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      const responseMessage = `<@${userId}> has responded to the challenge on the **${challengeDifficulty}**!\nLet's see who is better!\n\n${comparison}`;
+      const responseMessage = `<@${userId}> has responded to the challenge on **${difficultyLabel}**!\nLet's see who is better!\n\n${comparison}`;
 
       return interaction.editReply({ content: responseMessage });
 
