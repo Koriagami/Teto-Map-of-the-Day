@@ -148,7 +148,7 @@ function formatPlayerStats(score) {
   stats += `• Accuracy: **${accuracy.toFixed(2)}%**\n`;
   stats += `• Max Combo: **${maxCombo.toLocaleString()}**\n`;
   stats += `• Score: **${scoreValue.toLocaleString()}**\n`;
-  stats += `• Hits: ${count300}/**${count100}**/${count50}/**${countMiss}**\n`;
+  stats += `• Hits: **${count300}**/${count100}/${count50}/**${countMiss}**\n\n`;
   
   return stats;
 }
