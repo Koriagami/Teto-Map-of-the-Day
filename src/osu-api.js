@@ -183,5 +183,31 @@ async function getUserBeatmapScore(beatmapId, userId, options = {}) {
   }
 }
 
-export { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore };
+/**
+ * Get user information by user ID or username
+ * @param {string} user - OSU user ID (number) or username (string)
+ * @param {object} options - Optional parameters (mode, key, etc.)
+ * @returns {Promise<object|null>} User object or null if user doesn't exist
+ */
+async function getUser(user, options = {}) {
+  const params = new URLSearchParams();
+  
+  if (options.mode) params.append('mode', options.mode);
+  if (options.key) params.append('key', options.key);
+
+  const queryString = params.toString();
+  const endpoint = `/users/${user}${queryString ? `?${queryString}` : ''}`;
+
+  try {
+    return await apiRequest(endpoint);
+  } catch (error) {
+    // If user doesn't exist, API returns 404
+    if (error.message.includes('404')) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUser };
 

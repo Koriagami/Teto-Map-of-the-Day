@@ -7,7 +7,7 @@ import {
   PermissionsBitField,
 } from 'discord.js';
 import { commands } from './commands.js';
-import { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore } from './osu-api.js';
+import { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUser } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, disconnect } from './db.js';
 
 const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
@@ -474,18 +474,40 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
     }
 
-    await associations.set(guildId, interaction.user.id, {
-      discordUsername: interaction.user.username,
-      osuUsername: profileInfo.username,
-      osuUserId: profileInfo.userId,
-      profileLink: profileInfo.profileLink,
-    });
+    // Verify that the OSU profile exists
+    await interaction.deferReply({ ephemeral: true });
+    
+    try {
+      const userIdentifier = profileInfo.userId || profileInfo.username;
+      const osuUser = await getUser(userIdentifier);
+      
+      if (!osuUser) {
+        return interaction.editReply({ 
+          content: `The OSU! profile you provided does not exist.\nPlease check the link and try again.` 
+        });
+      }
 
-    const displayName = profileInfo.username || `User ${profileInfo.userId}`;
-    return interaction.reply({ 
-      content: `✅ Successfully linked your Discord account to OSU! profile: **${displayName}**\nProfile: ${profileInfo.profileLink}`, 
-      ephemeral: true 
-    });
+      // Update profile info with verified data from API
+      const verifiedUserId = osuUser.id?.toString();
+      const verifiedUsername = osuUser.username;
+      const verifiedProfileLink = `https://osu.ppy.sh/users/${verifiedUserId}`;
+
+      await associations.set(guildId, interaction.user.id, {
+        discordUsername: interaction.user.username,
+        osuUsername: verifiedUsername,
+        osuUserId: verifiedUserId,
+        profileLink: verifiedProfileLink,
+      });
+
+      return interaction.editReply({ 
+        content: `✅ Successfully linked your Discord account to OSU! profile: **${verifiedUsername}**\nProfile: ${verifiedProfileLink}` 
+      });
+    } catch (error) {
+      console.error('Error verifying OSU profile:', error);
+      return interaction.editReply({ 
+        content: `Error verifying OSU! profile: ${error.message}\nPlease try again later.` 
+      });
+    }
   }
 
   // /teto map submit
