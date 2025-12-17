@@ -7,7 +7,7 @@ import {
   PermissionsBitField,
 } from 'discord.js';
 import { commands } from './commands.js';
-import { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUser } from './osu-api.js';
+import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUser } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, disconnect } from './db.js';
 
 const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
@@ -140,17 +140,6 @@ function extractOsuProfile(profileLink) {
   }
 
   return null;
-  if (uUsernameMatch) {
-    return { userId: null, username: uUsernameMatch[1], profileLink };
-  }
-
-  // If it's just a username (no URL), assume it's a username
-  const justUsername = profileLink.trim();
-  if (justUsername && !justUsername.includes('http') && !justUsername.includes('/')) {
-    return { userId: null, username: justUsername, profileLink: `https://osu.ppy.sh/users/${justUsername}` };
-  }
-
-  return null;
 }
 
 // When ready
@@ -161,69 +150,6 @@ client.once(Events.ClientReady, () => {
 // Interaction handling
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
-
-  // Handle /test command
-  if (interaction.commandName === 'test') {
-    await interaction.deferReply({ ephemeral: true });
-
-    try {
-      const mapLink = interaction.options.getString('maplink');
-      const limit = interaction.options.getInteger('limit') || 10;
-
-      // Extract beatmap ID from URL
-      const beatmapId = extractBeatmapId(mapLink);
-      if (!beatmapId) {
-        return interaction.editReply({ content: 'Invalid beatmap link or ID. Please provide a valid osu.ppy.sh beatmap URL or beatmap ID.' });
-      }
-
-      // Get beatmap info and scores
-      const [beatmap, scoresData] = await Promise.all([
-        getBeatmap(beatmapId),
-        getBeatmapScores(beatmapId, { limit })
-      ]);
-
-      if (!beatmap) {
-        return interaction.editReply({ content: 'Beatmap not found.' });
-      }
-
-      const scores = scoresData.scores || [];
-      if (scores.length === 0) {
-        return interaction.editReply({ 
-          content: `**${beatmap.beatmapset?.title || 'Unknown'}** - ${beatmap.version}\n\nNo scores found for this beatmap.` 
-        });
-      }
-
-      // Format leaderboard
-      let leaderboard = `**${beatmap.beatmapset?.title || 'Unknown'}** - ${beatmap.version}\n`;
-      leaderboard += `**Difficulty:** ${beatmap.difficulty_rating}★ | **BPM:** ${beatmap.bpm} | **Length:** ${Math.floor(beatmap.total_length / 60)}:${String(beatmap.total_length % 60).padStart(2, '0')}\n\n`;
-      leaderboard += `**Top ${scores.length} Scores:**\n\n`;
-
-      scores.forEach((score, index) => {
-        const rank = index + 1;
-        const username = score.user?.username || 'Unknown';
-        const pp = score.pp ? `${score.pp.toFixed(2)}pp` : 'N/A';
-        const accuracy = score.accuracy ? `${(score.accuracy * 100).toFixed(2)}%` : 'N/A';
-        const mods = score.mods && score.mods.length > 0 ? `+${score.mods.join('')}` : '';
-        
-        leaderboard += `${rank}. **${username}** - ${pp} (${accuracy}) ${mods}\n`;
-        if (score.max_combo) {
-          leaderboard += `   ${score.max_combo}x combo | ${score.statistics?.count_300 || 0}/${score.statistics?.count_100 || 0}/${score.statistics?.count_50 || 0}/${score.statistics?.count_miss || 0}\n`;
-        }
-      });
-
-      // Discord message limit is 2000 characters
-      if (leaderboard.length > 2000) {
-        leaderboard = leaderboard.substring(0, 1997) + '...';
-      }
-
-      return interaction.editReply({ content: leaderboard });
-    } catch (error) {
-      console.error('Error in /test command:', error);
-      return interaction.editReply({ 
-        content: `Error fetching leaderboard: ${error.message}\n\nMake sure OSU_CLIENT_ID and OSU_CLIENT_SECRET are set in your .env file.` 
-      });
-    }
-  }
 
   // Handle /rsc command
   if (interaction.commandName === 'rsc') {
