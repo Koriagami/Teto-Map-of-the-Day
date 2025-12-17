@@ -132,6 +132,7 @@ function formatBeatmapLink(score) {
 
 // Helper: format player stats from score object
 function formatPlayerStats(score) {
+  const rank = score.rank || 'N/A';
   const pp = score.pp || 0;
   const accuracy = (score.accuracy || 0) * 100;
   const maxCombo = score.max_combo || 0;
@@ -142,6 +143,7 @@ function formatPlayerStats(score) {
   const countMiss = score.statistics?.count_miss || 0;
   
   let stats = `**Score Stats:**\n`;
+  stats += `• Rank: **${rank}**\n`;
   stats += `• PP: **${pp.toFixed(2)}**\n`;
   stats += `• Accuracy: **${accuracy.toFixed(2)}%**\n`;
   stats += `• Max Combo: **${maxCombo.toLocaleString()}**\n`;
