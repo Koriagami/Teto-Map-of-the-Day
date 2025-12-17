@@ -34,8 +34,32 @@ function todayString() {
   return now.toISOString().split('T')[0];
 }
 
+// Helper: get operating channel with validation
+async function getOperatingChannel(guildId, guild) {
+  const opChannelId = await dbServerConfig.get(guildId);
+  if (!opChannelId) {
+    return { error: 'Teto is not set up yet. Ask an admin to use /teto setup.' };
+  }
+
+  try {
+    const opChannel = await guild.channels.fetch(opChannelId);
+    if (!opChannel) {
+      return { error: 'Operating channel is invalid. Re-run setup.' };
+    }
+    return { channel: opChannel, channelId: opChannelId };
+  } catch (err) {
+    console.error('Failed to fetch operating channel', err);
+    return { error: 'Operating channel is invalid. Re-run setup.' };
+  }
+}
+
 // Helper: compare two scores and format comparison table
 function compareScores(challengerScore, responderScore, responderUsername) {
+  // Validate inputs
+  if (!challengerScore || !responderScore || typeof challengerScore !== 'object' || typeof responderScore !== 'object') {
+    throw new Error('Invalid score data provided for comparison');
+  }
+
   const challengerUsername = challengerScore.user?.username || 'Challenger';
   const responderName = responderUsername;
 
@@ -207,6 +231,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     try {
       const guildId = interaction.guildId;
+      if (!guildId) {
+        return interaction.editReply({ 
+          content: 'This command can only be used in a server.',
+          ephemeral: true 
+        });
+      }
       const userId = interaction.user.id;
       const respondForMapLink = interaction.options.getString('respond_for_map_link');
 
@@ -268,27 +298,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
           );
 
           // Get operating channel
-          const opChannelId = await dbServerConfig.get(guildId);
-          if (!opChannelId) {
+          const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
+          if (opChannelResult.error) {
             return interaction.editReply({ 
-              content: 'Teto is not set up yet. Ask an admin to use /teto setup.',
-              ephemeral: true 
-            });
-          }
-
-          const guild = interaction.guild;
-          const opChannel = await guild.channels.fetch(opChannelId);
-          
-          if (!opChannel) {
-            return interaction.editReply({ 
-              content: 'Operating channel is invalid. Re-run setup.',
+              content: opChannelResult.error,
               ephemeral: true 
             });
           }
 
           // Post challenge in operating channel
           const challengeMessage = `<@${userId}> has issued a challenge for the **${difficulty}**!\nBeat the score below and use \`/rsc\` command to respond!`;
-          await opChannel.send(challengeMessage);
+          await opChannelResult.channel.send(challengeMessage);
 
           return interaction.editReply({ 
             content: `Challenge issued for **${difficulty}**! Check the operating channel.`
@@ -337,27 +357,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
           );
 
           // Get operating channel
-          const opChannelId = await dbServerConfig.get(guildId);
-          if (!opChannelId) {
+          const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
+          if (opChannelResult.error) {
             return interaction.editReply({ 
-              content: 'Teto is not set up yet. Ask an admin to use /teto setup.',
-              ephemeral: true 
-            });
-          }
-
-          const guild = interaction.guild;
-          const opChannel = await guild.channels.fetch(opChannelId);
-          
-          if (!opChannel) {
-            return interaction.editReply({ 
-              content: 'Operating channel is invalid. Re-run setup.',
+              content: opChannelResult.error,
               ephemeral: true 
             });
           }
 
           // Post challenge in operating channel
           const challengeMessage = `<@${userId}> has issued a challenge for the **${difficulty}**!\nBeat the score below and use \`/rsc\` command to respond!`;
-          await opChannel.send(challengeMessage);
+          await opChannelResult.channel.send(challengeMessage);
 
           return interaction.editReply({ 
             content: 'Huh? Looks like we are uncontested on this diff! COME AND CHALLENGE US!'
@@ -380,21 +390,41 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      // Get responder's score (use the score we already fetched)
-      const responderScore = userScore;
-
-      if (!responderScore) {
-        return interaction.editReply({ 
-          content: 'Could not find your score for this beatmap.',
-          ephemeral: true 
-        });
+      // Get responder's score for the challenge beatmap
+      // If we don't have it yet (responding without param), fetch it
+      let responderScore = userScore;
+      if (!responderScore || responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
+        responderScore = await getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
+        if (!responderScore) {
+          return interaction.editReply({ 
+            content: 'You have no score for this beatmap. Play it first!',
+            ephemeral: true 
+          });
+        }
       }
 
       const challengerScore = existingChallenge.challengerScore;
       const challengeDifficulty = existingChallenge.difficulty;
 
+      // Ensure challengerScore is an object (Prisma JSON field)
+      if (typeof challengerScore !== 'object' || challengerScore === null) {
+        return interaction.editReply({ 
+          content: 'Error: Challenge data is invalid. Please create a new challenge.',
+          ephemeral: true 
+        });
+      }
+
       // Compare scores and create comparison table
-      const comparison = compareScores(challengerScore, responderScore, interaction.user.username);
+      let comparison;
+      try {
+        comparison = compareScores(challengerScore, responderScore, interaction.user.username);
+      } catch (error) {
+        console.error('Error comparing scores:', error);
+        return interaction.editReply({ 
+          content: `Error comparing scores: ${error.message}`,
+          ephemeral: true 
+        });
+      }
 
       const responseMessage = `<@${userId}> has responded to the challenge on the **${challengeDifficulty}**!\nLet's see who is better!\n\n${comparison}`;
 
@@ -415,6 +445,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const subcommandGroup = interaction.options.getSubcommandGroup(false);
   const sub = interaction.options.getSubcommand(false);
   const guildId = interaction.guildId;
+  if (!guildId) {
+    return interaction.reply({ 
+      content: 'This command can only be used in a server.',
+      ephemeral: true 
+    });
+  }
   const channel = interaction.channel;
 
   // /teto setup
@@ -516,11 +552,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!mapLink || !mapLink.includes('osu.ppy.sh')) {
       return interaction.reply({ content: "Impossible to submit the map - link doesn't contain OSU! map", ephemeral: true });
     }
-    const opChannelId = await dbServerConfig.get(guildId);
-    if (!opChannelId) {
-      return interaction.reply({ content: 'Teto is not set up yet. Ask an admin to use /teto setup.', ephemeral: true });
-    }
-
     const today = todayString();
     const hasSubmitted = await submissions.hasSubmittedToday(guildId, interaction.user.id, today);
     if (hasSubmitted) {
@@ -535,16 +566,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     // fetch op channel
-    const guild = interaction.guild;
-    let opChannel;
-    try {
-      opChannel = await guild.channels.fetch(opChannelId);
-    } catch (err) {
-      console.error('Failed to fetch operating channel', err);
+    const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
+    if (opChannelResult.error) {
+      return interaction.reply({ content: opChannelResult.error, ephemeral: true });
     }
-    if (!opChannel) {
-      return interaction.reply({ content: 'Operating channel is invalid. Re-run setup.', ephemeral: true });
-    }
+    const opChannel = opChannelResult.channel;
+    const opChannelId = opChannelResult.channelId;
 
     let msgContent = `<@${interaction.user.id}> map of the day is - ${mapLink}`;
     if (mods.length > 0) {
@@ -581,7 +608,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     if (reaction.emoji.name !== '👎') return;
 
     // Only monitor reactions in operating channels
-    const opChannelId = serverConfig[msg.guildId];
+    const opChannelId = await dbServerConfig.get(msg.guildId);
     if (!opChannelId || msg.channelId !== opChannelId) return;
 
     // Skip if message was already edited (contains "voted to be meh")
