@@ -130,6 +130,30 @@ function formatBeatmapLink(score) {
   return null;
 }
 
+// Helper: validate score object has required structure
+function isValidScore(score) {
+  if (!score || typeof score !== 'object') {
+    return false;
+  }
+  
+  // Must have beatmap with id
+  if (!score.beatmap || !score.beatmap.id) {
+    return false;
+  }
+  
+  // Must have a valid score value (number)
+  if (typeof score.score !== 'number') {
+    return false;
+  }
+  
+  // Must have beatmap version (difficulty name)
+  if (!score.beatmap.version) {
+    return false;
+  }
+  
+  return true;
+}
+
 // Helper: get map title from score object or fetch beatmap if needed
 async function getMapTitle(score) {
   // Try multiple possible paths in the score object
@@ -159,11 +183,19 @@ async function getMapTitle(score) {
 
 // Helper: format player stats from score object
 function formatPlayerStats(score) {
+  // Safely extract score value - handle both number and object cases
+  let scoreValue = 0;
+  if (typeof score.score === 'number') {
+    scoreValue = score.score;
+  } else if (typeof score.score === 'object' && score.score !== null) {
+    // Sometimes score might be nested in an object
+    scoreValue = score.score.total || score.score.value || 0;
+  }
+  
   const rank = score.rank || 'N/A';
-  const pp = score.pp || 0;
-  const accuracy = (score.accuracy || 0) * 100;
-  const maxCombo = score.max_combo || 0;
-  const scoreValue = score.score || 0;
+  const pp = typeof score.pp === 'number' ? score.pp : 0;
+  const accuracy = typeof score.accuracy === 'number' ? (score.accuracy * 100) : 0;
+  const maxCombo = typeof score.max_combo === 'number' ? score.max_combo : 0;
   const count300 = score.statistics?.count_300 || 0;
   const count100 = score.statistics?.count_100 || 0;
   const count50 = score.statistics?.count_50 || 0;
@@ -256,15 +288,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         userScore = recentScores[0];
-        beatmapId = userScore.beatmap?.id?.toString();
-        difficulty = userScore.beatmap?.version || 'Unknown';
-
-        if (!beatmapId) {
+        
+        // Validate score object
+        if (!isValidScore(userScore)) {
           return interaction.editReply({ 
-            content: 'Could not determine beatmap from your recent score.',
+            content: 'Invalid score data received from OSU API. Please play a map first and try again.',
             ephemeral: true 
           });
         }
+
+        beatmapId = userScore.beatmap.id.toString();
+        difficulty = userScore.beatmap.version;
 
         // Check if challenge already exists
         existingChallenge = await activeChallenges.getByDifficulty(guildId, beatmapId, difficulty);
@@ -321,14 +355,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         // Check if user has score for this beatmap
         userScore = await getUserBeatmapScore(beatmapId, osuUserId);
-        if (!userScore) {
+        if (!userScore || !isValidScore(userScore)) {
           return interaction.editReply({ 
             content: 'You have no score for this beatmap. Play it first!',
             ephemeral: true 
           });
         }
 
-        difficulty = userScore.beatmap?.version || 'Unknown';
+        difficulty = userScore.beatmap.version;
 
         // Check if challenge exists
         existingChallenge = await activeChallenges.getByDifficulty(guildId, beatmapId, difficulty);
