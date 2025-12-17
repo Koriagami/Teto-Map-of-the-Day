@@ -353,7 +353,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
 
-        // Check if user has score for this beatmap
+        // Get user's best score for this beatmap (not recent, but best)
         userScore = await getUserBeatmapScore(beatmapId, osuUserId);
         if (!userScore || !isValidScore(userScore)) {
           return interaction.editReply({ 

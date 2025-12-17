@@ -158,10 +158,11 @@ async function getUserRecentScores(userId, options = {}) {
 }
 
 /**
- * Get user's score for a specific beatmap
+ * Get user's best score for a specific beatmap
  * @param {string} beatmapId - The beatmap ID
  * @param {string} userId - OSU user ID
  * @param {object} options - Optional parameters (mode, mods, etc.)
+ * @returns {Promise<object|null>} User's best score for the beatmap, or null if no score exists
  */
 async function getUserBeatmapScore(beatmapId, userId, options = {}) {
   const params = new URLSearchParams();
@@ -170,6 +171,7 @@ async function getUserBeatmapScore(beatmapId, userId, options = {}) {
   if (options.mods) params.append('mods', options.mods);
 
   const queryString = params.toString();
+  // This endpoint returns the user's best score for the specified beatmap
   const endpoint = `/beatmaps/${beatmapId}/scores/users/${userId}${queryString ? `?${queryString}` : ''}`;
 
   try {
