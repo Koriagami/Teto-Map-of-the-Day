@@ -117,6 +117,40 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   return table;
 }
 
+// Helper: format beatmap link from score object
+function formatBeatmapLink(score) {
+  const beatmapId = score.beatmap?.id;
+  const beatmapsetId = score.beatmap?.beatmapset_id;
+  
+  if (beatmapsetId && beatmapId) {
+    return `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${beatmapId}`;
+  } else if (beatmapId) {
+    return `https://osu.ppy.sh/beatmaps/${beatmapId}`;
+  }
+  return null;
+}
+
+// Helper: format player stats from score object
+function formatPlayerStats(score) {
+  const pp = score.pp || 0;
+  const accuracy = (score.accuracy || 0) * 100;
+  const maxCombo = score.max_combo || 0;
+  const scoreValue = score.score || 0;
+  const count300 = score.statistics?.count_300 || 0;
+  const count100 = score.statistics?.count_100 || 0;
+  const count50 = score.statistics?.count_50 || 0;
+  const countMiss = score.statistics?.count_miss || 0;
+  
+  let stats = `**Score Stats:**\n`;
+  stats += `• PP: ${pp.toFixed(2)}\n`;
+  stats += `• Accuracy: ${accuracy.toFixed(2)}%\n`;
+  stats += `• Max Combo: ${maxCombo.toLocaleString()}\n`;
+  stats += `• Score: ${scoreValue.toLocaleString()}\n`;
+  stats += `• Hits: ${count300}/${count100}/${count50}/${countMiss} (300/100/50/Miss)`;
+  
+  return stats;
+}
+
 // Helper: extract OSU username/user ID from profile link
 // Requires "osu.ppy.sh/users/" format
 function extractOsuProfile(profileLink) {
@@ -233,11 +267,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
 
           // Post challenge in operating channel
-          const challengeMessage = `<@${userId}> has issued a challenge for the **${difficulty}**!\nBeat the score below and use \`/rsc\` command to respond!`;
+          const beatmapLink = formatBeatmapLink(userScore);
+          const playerStats = formatPlayerStats(userScore);
+          const difficultyLink = beatmapLink ? `[${difficulty}](${beatmapLink})` : `**${difficulty}**`;
+          
+          const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\n${playerStats}\n\nBeat the score above and use \`/rsc\` command to respond!`;
           await opChannelResult.channel.send(challengeMessage);
 
           return interaction.editReply({ 
-            content: `Challenge issued for **${difficulty}**! Check the operating channel.`
+            content: `Challenge issued for ${difficultyLink}! Check the operating channel.`
           });
         }
       } else {
@@ -292,7 +330,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
 
           // Post challenge in operating channel
-          const challengeMessage = `<@${userId}> has issued a challenge for the **${difficulty}**!\nBeat the score below and use \`/rsc\` command to respond!`;
+          const beatmapLink = formatBeatmapLink(userScore);
+          const playerStats = formatPlayerStats(userScore);
+          const difficultyLink = beatmapLink ? `[${difficulty}](${beatmapLink})` : `**${difficulty}**`;
+          
+          const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\n${playerStats}\n\nBeat the score above and use \`/rsc\` command to respond!`;
           await opChannelResult.channel.send(challengeMessage);
 
           return interaction.editReply({ 
