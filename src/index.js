@@ -257,25 +257,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
             userScore
           );
 
-          // Get operating channel
-          const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
-          if (opChannelResult.error) {
-            return interaction.editReply({ 
-              content: opChannelResult.error,
-              ephemeral: true 
-            });
-          }
-
-          // Post challenge in operating channel
+          // Post challenge in the channel where command was invoked
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = formatPlayerStats(userScore);
           const difficultyLink = beatmapLink ? `[${difficulty}](${beatmapLink})` : `**${difficulty}**`;
           
-          const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\n${playerStats}\n\nBeat the score above and use \`/rsc\` command to respond!`;
-          await opChannelResult.channel.send(challengeMessage);
+          const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
+          await interaction.channel.send(challengeMessage);
 
           return interaction.editReply({ 
-            content: `Challenge issued for ${difficultyLink}! Check the operating channel.`
+            content: `Challenge issued for ${difficultyLink}!`
           });
         }
       } else {
@@ -320,22 +311,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             userScore
           );
 
-          // Get operating channel
-          const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
-          if (opChannelResult.error) {
-            return interaction.editReply({ 
-              content: opChannelResult.error,
-              ephemeral: true 
-            });
-          }
-
-          // Post challenge in operating channel
+          // Post challenge in the channel where command was invoked
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = formatPlayerStats(userScore);
           const difficultyLink = beatmapLink ? `[${difficulty}](${beatmapLink})` : `**${difficulty}**`;
           
-          const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\n${playerStats}\n\nBeat the score above and use \`/rsc\` command to respond!`;
-          await opChannelResult.channel.send(challengeMessage);
+          const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
+          await interaction.channel.send(challengeMessage);
 
           return interaction.editReply({ 
             content: 'Huh? Looks like we are uncontested on this diff! COME AND CHALLENGE US!'
