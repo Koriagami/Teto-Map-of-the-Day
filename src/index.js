@@ -94,8 +94,14 @@ function compareScores(challengerScore, responderScore, responderUsername) {
 }
 
 // Helper: extract OSU username/user ID from profile link
+// Requires "osu.ppy.sh/users/" format
 function extractOsuProfile(profileLink) {
   if (!profileLink) return null;
+
+  // Must contain "osu.ppy.sh/users/" in the link
+  if (!profileLink.includes('osu.ppy.sh/users/')) {
+    return null;
+  }
 
   // Try /users/{id} format
   const usersMatch = profileLink.match(/osu\.ppy\.sh\/users\/(\d+)/);
@@ -109,14 +115,7 @@ function extractOsuProfile(profileLink) {
     return { userId: null, username: usernameMatch[1], profileLink };
   }
 
-  // Try /u/{id} format
-  const uMatch = profileLink.match(/osu\.ppy\.sh\/u\/(\d+)/);
-  if (uMatch) {
-    return { userId: uMatch[1], username: null, profileLink };
-  }
-
-  // Try /u/{username} format
-  const uUsernameMatch = profileLink.match(/osu\.ppy\.sh\/u\/([^\/\?#]+)/);
+  return null;
   if (uUsernameMatch) {
     return { userId: null, username: uUsernameMatch[1], profileLink };
   }
@@ -432,11 +431,45 @@ client.on(Events.InteractionCreate, async (interaction) => {
   // /teto link
   if (sub === 'link') {
     const profileLink = interaction.options.getString('profilelink');
+    
+    // Validate link format - must contain "osu.ppy.sh/users/"
+    if (!profileLink || !profileLink.includes('osu.ppy.sh/users/')) {
+      return interaction.reply({ 
+        content: 'Invalid OSU! profile link. The link must contain "osu.ppy.sh/users/" in it.\nExample: https://osu.ppy.sh/users/12345 or https://osu.ppy.sh/users/username', 
+        ephemeral: true 
+      });
+    }
+
     const profileInfo = extractOsuProfile(profileLink);
 
     if (!profileInfo) {
       return interaction.reply({ 
-        content: 'Invalid OSU! profile link. Please provide a valid link like:\n- https://osu.ppy.sh/users/12345\n- https://osu.ppy.sh/users/username\n- Or just your username', 
+        content: 'Invalid OSU! profile link format. Please provide a valid link like:\n- https://osu.ppy.sh/users/12345\n- https://osu.ppy.sh/users/username', 
+        ephemeral: true 
+      });
+    }
+
+    // Check if Discord user already has a profile linked
+    const existingAssociation = await associations.get(guildId, interaction.user.id);
+    if (existingAssociation) {
+      const existingDisplayName = existingAssociation.osuUsername || `User ${existingAssociation.osuUserId}`;
+      return interaction.reply({ 
+        content: `You already have an OSU! profile linked: **${existingDisplayName}**\nProfile: ${existingAssociation.profileLink}\n\nTo link a different profile, please contact an administrator.`, 
+        ephemeral: true 
+      });
+    }
+
+    // Check if OSU profile is already linked to another Discord user
+    let existingOsuLink = null;
+    if (profileInfo.userId) {
+      existingOsuLink = await associations.findByOsuUserIdInGuild(guildId, profileInfo.userId);
+    } else if (profileInfo.username) {
+      existingOsuLink = await associations.findByOsuUsernameInGuild(guildId, profileInfo.username);
+    }
+
+    if (existingOsuLink && existingOsuLink.discordUserId !== interaction.user.id) {
+      return interaction.reply({ 
+        content: `This OSU! profile is already linked to another Discord user (<@${existingOsuLink.discordUserId}>).\nEach OSU! profile can only be linked to one Discord account per server.`, 
         ephemeral: true 
       });
     }

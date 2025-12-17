@@ -142,6 +142,24 @@ export const associations = {
       where: { osuUsername },
     });
   },
+
+  async findByOsuUserIdInGuild(guildId, osuUserId) {
+    return prisma.userAssociation.findFirst({
+      where: { 
+        guildId,
+        osuUserId,
+      },
+    });
+  },
+
+  async findByOsuUsernameInGuild(guildId, osuUsername) {
+    return prisma.userAssociation.findFirst({
+      where: { 
+        guildId,
+        osuUsername,
+      },
+    });
+  },
 };
 
 // Active Challenge operations
