@@ -142,11 +142,11 @@ function formatPlayerStats(score) {
   const countMiss = score.statistics?.count_miss || 0;
   
   let stats = `**Score Stats:**\n`;
-  stats += `• PP: ${pp.toFixed(2)}\n`;
-  stats += `• Accuracy: ${accuracy.toFixed(2)}%\n`;
-  stats += `• Max Combo: ${maxCombo.toLocaleString()}\n`;
-  stats += `• Score: ${scoreValue.toLocaleString()}\n`;
-  stats += `• Hits: ${count300}/${count100}/${count50}/${countMiss} (300/100/50/Miss)`;
+  stats += `• PP: **${pp.toFixed(2)}**\n`;
+  stats += `• Accuracy: **${accuracy.toFixed(2)}%**\n`;
+  stats += `• Max Combo: **${maxCombo.toLocaleString()}**\n`;
+  stats += `• Score: **${scoreValue.toLocaleString()}**\n`;
+  stats += `• Hits: ${count300}/**${count100}**/${count50}/**${countMiss}**\n`;
   
   return stats;
 }
@@ -260,7 +260,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           // Post challenge in the channel where command was invoked
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = formatPlayerStats(userScore);
-          const difficultyLink = beatmapLink ? `[${difficulty}](${beatmapLink})` : `**${difficulty}**`;
+          const mapTitle = userScore.beatmap?.beatmapset?.title || userScore.beatmap?.beatmapset?.title_unicode || 'Unknown Map';
+          const difficultyLabel = `${mapTitle} [${difficulty}]`;
+          const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
           const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
           await interaction.channel.send(challengeMessage);
@@ -314,7 +316,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           // Post challenge in the channel where command was invoked
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = formatPlayerStats(userScore);
-          const difficultyLink = beatmapLink ? `[${difficulty}](${beatmapLink})` : `**${difficulty}**`;
+          const mapTitle = userScore.beatmap?.beatmapset?.title || userScore.beatmap?.beatmapset?.title_unicode || 'Unknown Map';
+          const difficultyLabel = `${mapTitle} [${difficulty}]`;
+          const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
           const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
           await interaction.channel.send(challengeMessage);
