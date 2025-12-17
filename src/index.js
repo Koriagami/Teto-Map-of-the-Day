@@ -7,7 +7,7 @@ import {
   PermissionsBitField,
 } from 'discord.js';
 import { commands } from './commands.js';
-import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUser } from './osu-api.js';
+import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, disconnect } from './db.js';
 
 const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
@@ -128,6 +128,33 @@ function formatBeatmapLink(score) {
     return `https://osu.ppy.sh/beatmaps/${beatmapId}`;
   }
   return null;
+}
+
+// Helper: get map title from score object or fetch beatmap if needed
+async function getMapTitle(score) {
+  // Try multiple possible paths in the score object
+  const title = score.beatmap?.beatmapset?.title 
+    || score.beatmap?.beatmapset?.title_unicode
+    || score.beatmapset?.title
+    || score.beatmapset?.title_unicode;
+  
+  if (title) {
+    return title;
+  }
+  
+  // If not found, fetch the beatmap to get the title
+  const beatmapId = score.beatmap?.id;
+  if (beatmapId) {
+    try {
+      const beatmap = await getBeatmap(beatmapId);
+      return beatmap.beatmapset?.title || beatmap.beatmapset?.title_unicode || 'Unknown Map';
+    } catch (error) {
+      console.error('Error fetching beatmap for title:', error);
+      return 'Unknown Map';
+    }
+  }
+  
+  return 'Unknown Map';
 }
 
 // Helper: format player stats from score object
@@ -262,7 +289,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           // Post challenge in the channel where command was invoked
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = formatPlayerStats(userScore);
-          const mapTitle = userScore.beatmap?.beatmapset?.title || userScore.beatmap?.beatmapset?.title_unicode || 'Unknown Map';
+          const mapTitle = await getMapTitle(userScore);
           const difficultyLabel = `${mapTitle} [${difficulty}]`;
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
@@ -318,7 +345,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           // Post challenge in the channel where command was invoked
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = formatPlayerStats(userScore);
-          const mapTitle = userScore.beatmap?.beatmapset?.title || userScore.beatmap?.beatmapset?.title_unicode || 'Unknown Map';
+          const mapTitle = await getMapTitle(userScore);
           const difficultyLabel = `${mapTitle} [${difficulty}]`;
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
