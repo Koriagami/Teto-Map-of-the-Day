@@ -261,6 +261,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const userId = interaction.user.id;
       const respondForMapLink = interaction.options.getString('respond_for_map_link');
 
+      // Get operational channel for challenge announcements
+      const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
+      if (opChannelResult.error) {
+        return interaction.editReply({ 
+          content: opChannelResult.error,
+          ephemeral: true 
+        });
+      }
+      const opChannel = opChannelResult.channel;
+
       // Check if user has association
       const association = await associations.get(guildId, userId);
       if (!association || !association.osuUserId) {
@@ -322,7 +332,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             userScore
           );
 
-          // Post challenge in the channel where command was invoked
+          // Post challenge announcement to operational channel
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = formatPlayerStats(userScore);
           const mapTitle = await getMapTitle(userScore);
@@ -330,7 +340,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
           const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
-          await interaction.channel.send(challengeMessage);
+          await opChannel.send(challengeMessage);
 
           return interaction.editReply({ 
             content: `Challenge issued for ${difficultyLink}!`
@@ -389,7 +399,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             userScore
           );
 
-          // Post challenge in the channel where command was invoked
+          // Post challenge announcement to operational channel
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = formatPlayerStats(userScore);
           const mapTitle = await getMapTitle(userScore);
@@ -397,7 +407,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
           const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
-          await interaction.channel.send(challengeMessage);
+          await opChannel.send(challengeMessage);
 
           return interaction.editReply({ 
             content: `Huh? Looks like we are uncontested on **${difficultyLabel}**! COME AND CHALLENGE US!`
