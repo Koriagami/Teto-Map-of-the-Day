@@ -355,9 +355,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         // Get user's best score for this beatmap (not recent, but best)
         userScore = await getUserBeatmapScore(beatmapId, osuUserId);
-        if (!userScore || !isValidScore(userScore)) {
+        
+        // Debug logging
+        if (!userScore) {
+          console.log(`No score found for beatmap ${beatmapId}, user ${osuUserId}`);
           return interaction.editReply({ 
             content: 'You have no score for this beatmap. Play it first!',
+            ephemeral: true 
+          });
+        }
+        
+        if (!isValidScore(userScore)) {
+          console.log(`Invalid score data for beatmap ${beatmapId}, user ${osuUserId}:`, JSON.stringify(userScore, null, 2));
+          return interaction.editReply({ 
+            content: 'Invalid score data received from OSU API. Please try again.',
             ephemeral: true 
           });
         }
