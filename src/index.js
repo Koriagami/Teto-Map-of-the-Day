@@ -466,9 +466,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      // Get map title and format difficulty label
+      // Get map title and format difficulty label with link
       const mapTitle = await getMapTitle(challengerScore);
       const difficultyLabel = `${mapTitle} [${challengeDifficulty}]`;
+      const beatmapLink = formatBeatmapLink(challengerScore);
+      const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
       // Compare scores and create comparison table
       let comparisonResult;
@@ -504,7 +506,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
 
-      // Build response message with win/loss status
+      // Build response message with win/loss status and separators
+      const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
       let statusMessage = '';
       if (responderWon) {
         statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
@@ -512,7 +515,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
       }
 
-      const responseMessage = `<@${userId}> has responded to the challenge on **${difficultyLabel}**!\nLet's see who is better!\n\n${comparison}${statusMessage}`;
+      const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
 
       // Post comparison results to Challenges channel
       await opChannel.send(responseMessage);
