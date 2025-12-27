@@ -695,21 +695,39 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
+      // Check bot permissions in the channel
+      const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
+      const botPermissions = opChannelResult.channel.permissionsFor(botMember);
+      if (!botPermissions || !botPermissions.has(PermissionsBitField.Flags.SendMessages)) {
+        return interaction.editReply({ 
+          content: `❌ Bot is missing permissions to send messages in <#${opChannelResult.channel.id}>. Please grant the bot "Send Messages" permission in that channel.`,
+          ephemeral: true 
+        });
+      }
+
       // Generate weekly update report
       const messages = await generateWeeklyUpdate(guildId);
       
       if (messages && messages.length > 0) {
         // Post messages to challenges channel (suppress embeds/thumbnails)
-        for (const message of messages) {
-          await opChannelResult.channel.send({
-            content: message,
-            flags: MessageFlags.SuppressEmbeds,
+        try {
+          for (const message of messages) {
+            await opChannelResult.channel.send({
+              content: message,
+              flags: MessageFlags.SuppressEmbeds,
+            });
+          }
+          return interaction.editReply({ 
+            content: `✅ Weekly challenges report posted to <#${opChannelResult.channel.id}>!`,
+            ephemeral: true 
+          });
+        } catch (sendError) {
+          console.error('Error sending report messages:', sendError);
+          return interaction.editReply({ 
+            content: `❌ Failed to post report to <#${opChannelResult.channel.id}>. Error: ${sendError.message}\n\nPlease check that the bot has "Send Messages" permission in that channel.`,
+            ephemeral: true 
           });
         }
-        return interaction.editReply({ 
-          content: `✅ Weekly challenges report posted to <#${opChannelResult.channel.id}>!`,
-          ephemeral: true 
-        });
       } else {
         return interaction.editReply({ 
           content: 'No challenges data to report for the last 30 days.',
@@ -718,6 +736,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     } catch (error) {
       console.error('Error generating challenges report:', error);
+      // Check if it's a permissions error
+      if (error.message && (error.message.includes('permission') || error.message.includes('Missing') || error.code === 50013)) {
+        return interaction.editReply({ 
+          content: `❌ Missing permissions: ${error.message}\n\nPlease ensure the bot has "Send Messages" permission in the Challenges channel.`,
+          ephemeral: true 
+        });
+      }
       return interaction.editReply({ 
         content: `Error generating report: ${error.message}`,
         ephemeral: true 
