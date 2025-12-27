@@ -651,6 +651,53 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
+  // /teto get_c_report
+  if (sub === 'get_c_report') {
+    // only admins
+    const memberPerms = interaction.memberPermissions;
+    if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
+      return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      // Get challenges channel
+      const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'challenges');
+      if (opChannelResult.error || !opChannelResult.channel) {
+        return interaction.editReply({ 
+          content: opChannelResult.error || 'Challenges channel is not configured. Use `/teto setup` to configure it.',
+          ephemeral: true 
+        });
+      }
+
+      // Generate weekly update report
+      const messages = await generateWeeklyUpdate(guildId);
+      
+      if (messages && messages.length > 0) {
+        // Post messages to challenges channel
+        for (const message of messages) {
+          await opChannelResult.channel.send(message);
+        }
+        return interaction.editReply({ 
+          content: `✅ Weekly challenges report posted to <#${opChannelResult.channel.id}>!`,
+          ephemeral: true 
+        });
+      } else {
+        return interaction.editReply({ 
+          content: 'No challenges data to report for the last 30 days.',
+          ephemeral: true 
+        });
+      }
+    } catch (error) {
+      console.error('Error generating challenges report:', error);
+      return interaction.editReply({ 
+        content: `Error generating report: ${error.message}`,
+        ephemeral: true 
+      });
+    }
+  }
+
   // /teto map submit
   if (subcommandGroup === 'map' && sub === 'submit') {
     const mapLink = interaction.options.getString('maplink');
