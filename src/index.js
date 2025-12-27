@@ -548,9 +548,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   // /teto setup
   if (sub === 'setup') {
-    // only admins
-    const memberPerms = interaction.memberPermissions;
-    if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
+    // only admins (including server owner)
+    const member = interaction.member;
+    if (!member) {
+      return interaction.reply({ content: 'Unable to verify permissions. Please try again.', ephemeral: true });
+    }
+    
+    // Check if user is guild owner
+    const isOwner = interaction.guild.ownerId === interaction.user.id;
+    
+    // Check if user has Administrator permission
+    const memberPerms = member.permissions;
+    const hasAdmin = memberPerms && memberPerms.has(PermissionsBitField.Flags.Administrator);
+    
+    if (!isOwner && !hasAdmin) {
       return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
     }
     
@@ -655,9 +666,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   // /teto get_c_report
   if (sub === 'get_c_report') {
-    // only admins
-    const memberPerms = interaction.memberPermissions;
-    if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
+    // only admins (including server owner)
+    const member = interaction.member;
+    if (!member) {
+      return interaction.reply({ content: 'Unable to verify permissions. Please try again.', ephemeral: true });
+    }
+    
+    // Check if user is guild owner
+    const isOwner = interaction.guild.ownerId === interaction.user.id;
+    
+    // Check if user has Administrator permission
+    const memberPerms = member.permissions;
+    const hasAdmin = memberPerms && memberPerms.has(PermissionsBitField.Flags.Administrator);
+    
+    if (!isOwner && !hasAdmin) {
       return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
     }
 
