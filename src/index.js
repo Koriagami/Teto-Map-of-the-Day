@@ -823,39 +823,50 @@ async function formatChallengeEntry(challenge) {
   }
 }
 
-// Helper: format challenge entry with days held (for defense streaks)
-async function formatChallengeEntryWithDays(challenge) {
+// Helper: calculate time held in days and hours
+function calculateTimeHeld(updatedAt) {
+  const now = new Date();
+  const startTime = new Date(updatedAt);
+  const diffMs = now - startTime;
+  const totalHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return { days, hours, totalHours };
+}
+
+// Helper: format challenge entry with time held (for defense streaks)
+async function formatChallengeEntryWithDays(challenge, timeHeld) {
   try {
     const score = challenge.challengerScore;
     if (!score || typeof score !== 'object') {
-      // Calculate days held even if score is invalid
-      const createdAt = new Date(challenge.createdAt);
-      const now = new Date();
-      const daysHeld = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
-      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}> [Held for ${daysHeld} days]`;
+      // Format time held
+      const timeStr = timeHeld.days > 0 
+        ? `${timeHeld.days} ${timeHeld.days === 1 ? 'day' : 'days'} ${timeHeld.hours} ${timeHeld.hours === 1 ? 'hour' : 'hours'}`
+        : `${timeHeld.hours} ${timeHeld.hours === 1 ? 'hour' : 'hours'}`;
+      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}> [Held for ${timeStr}]`;
     }
     
     const mapTitle = await getMapTitle(score);
     const difficultyLabel = `${mapTitle} [${challenge.difficulty}]`;
     const beatmapLink = formatBeatmapLink(score);
     
-    // Calculate days held
-    const createdAt = new Date(challenge.createdAt);
-    const now = new Date();
-    const daysHeld = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+    // Format time held
+    const timeStr = timeHeld.days > 0 
+      ? `${timeHeld.days} ${timeHeld.days === 1 ? 'day' : 'days'} ${timeHeld.hours} ${timeHeld.hours === 1 ? 'hour' : 'hours'}`
+      : `${timeHeld.hours} ${timeHeld.hours === 1 ? 'hour' : 'hours'}`;
     
     if (beatmapLink) {
-      return `[${difficultyLabel}](${beatmapLink}) - <@${challenge.challengerUserId}> [Held for ${daysHeld} days]`;
+      return `[${difficultyLabel}](${beatmapLink}) - <@${challenge.challengerUserId}> [Held for ${timeStr}]`;
     }
-    return `**${difficultyLabel}** - <@${challenge.challengerUserId}> [Held for ${daysHeld} days]`;
+    return `**${difficultyLabel}** - <@${challenge.challengerUserId}> [Held for ${timeStr}]`;
   } catch (error) {
     console.error('Error formatting challenge entry with days:', error);
-    // Fallback: try to calculate days even on error
+    // Fallback: try to calculate time even on error
     try {
-      const createdAt = new Date(challenge.createdAt);
-      const now = new Date();
-      const daysHeld = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
-      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}> [Held for ${daysHeld} days]`;
+      const timeStr = timeHeld.days > 0 
+        ? `${timeHeld.days} ${timeHeld.days === 1 ? 'day' : 'days'} ${timeHeld.hours} ${timeHeld.hours === 1 ? 'hour' : 'hours'}`
+        : `${timeHeld.hours} ${timeHeld.hours === 1 ? 'hour' : 'hours'}`;
+      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}> [Held for ${timeStr}]`;
     } catch {
       return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}>`;
     }
@@ -903,27 +914,38 @@ async function generateWeeklyUpdate(guildId) {
       }
     }
 
-    // Get all challenges for defense streaks (not just last 30 days) - for this guild only
+    // Get all active challenges for defense streaks - for this guild only
+    // All active challenges are eligible, regardless of when they were created or if ownership changed
     const allChallenges = await activeChallenges.getAllChallengesForDefenseStreaks(guildId);
-    const allDefenseStreaks = allChallenges.filter(challenge => {
-      // Verify challenge belongs to this guild (safety check)
-      if (challenge.guildId !== guildId) {
-        console.warn(`Challenge ${challenge.id} has mismatched guildId. Expected ${guildId}, got ${challenge.guildId}`);
-        return false;
-      }
-      const createdAt = new Date(challenge.createdAt);
-      const updatedAt = new Date(challenge.updatedAt);
-      return updatedAt.getTime() === createdAt.getTime(); // Never changed ownership
-    });
     
-    // Sort defense streaks by creation date (oldest first = longest defense)
-    allDefenseStreaks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    const topDefenseStreaks = allDefenseStreaks.slice(0, 5);
+    // Calculate time held for each challenge (from updatedAt to now - when current champion took ownership)
+    const challengesWithTimeHeld = allChallenges
+      .filter(challenge => {
+        // Verify challenge belongs to this guild (safety check)
+        if (challenge.guildId !== guildId) {
+          console.warn(`Challenge ${challenge.id} has mismatched guildId. Expected ${guildId}, got ${challenge.guildId}`);
+          return false;
+        }
+        return true;
+      })
+      .map(challenge => {
+        // Calculate time held from updatedAt (when current champion took ownership) to now
+        const timeHeld = calculateTimeHeld(challenge.updatedAt);
+        return { challenge, timeHeld };
+      });
+    
+    // Sort by longest held time (descending - highest totalHours first)
+    challengesWithTimeHeld.sort((a, b) => b.timeHeld.totalHours - a.timeHeld.totalHours);
+    
+    // Get top 5
+    const topDefenseStreaks = challengesWithTimeHeld.slice(0, 5);
 
     // Format entries
     const newChampionsEntries = await Promise.all(newChampions.map(formatChallengeEntry));
     const uncontestedEntries = await Promise.all(uncontestedChallenges.map(formatChallengeEntry));
-    const defenseStreakEntries = await Promise.all(topDefenseStreaks.map(formatChallengeEntryWithDays));
+    const defenseStreakEntries = await Promise.all(
+      topDefenseStreaks.map(({ challenge, timeHeld }) => formatChallengeEntryWithDays(challenge, timeHeld))
+    );
 
     // Build message sections
     const sections = [];
