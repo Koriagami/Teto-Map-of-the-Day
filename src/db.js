@@ -208,6 +208,7 @@ export const activeChallenges = {
         challengerUserId,
         challengerOsuId,
         challengerScore,
+        originalChallengerUserId: challengerUserId, // Original challenger is the same as current when creating
       },
     });
   },
@@ -237,13 +238,52 @@ export const activeChallenges = {
         challengerUserId: newChallengerUserId,
         challengerOsuId: newChallengerOsuId,
         challengerScore: newChallengerScore,
+        updatedAt: new Date(), // Update timestamp when champion changes
       },
+    });
+  },
+
+  async getChallengesInLast30Days(guildId) {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    return prisma.activeChallenge.findMany({
+      where: {
+        guildId,
+        OR: [
+          { createdAt: { gte: thirtyDaysAgo } },
+          { updatedAt: { gte: thirtyDaysAgo } },
+        ],
+      },
+      orderBy: [
+        { updatedAt: 'desc' },
+        { createdAt: 'desc' },
+      ],
     });
   },
 
   async getAll(guildId) {
     return prisma.activeChallenge.findMany({
       where: { guildId },
+    });
+  },
+
+  async getAllGuildIds() {
+    const challenges = await prisma.activeChallenge.findMany({
+      select: { guildId: true },
+      distinct: ['guildId'],
+    });
+    return [...new Set(challenges.map(c => c.guildId))];
+  },
+
+  async getAllChallengesForDefenseStreaks(guildId) {
+    return prisma.activeChallenge.findMany({
+      where: {
+        guildId, // Filter by specific guild
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
     });
   },
 };

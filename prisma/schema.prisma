@@ -52,14 +52,16 @@ model UserAssociation {
 }
 
 model ActiveChallenge {
-  id                String   @id @default(uuid())
-  guildId           String
-  beatmapId         String
-  difficulty        String   // beatmap version/difficulty name
-  challengerUserId  String   // Discord user ID who issued the challenge
-  challengerOsuId   String   // OSU user ID
-  challengerScore   Json     // Full score data from OSU API
-  createdAt         DateTime @default(now())
+  id                    String   @id @default(uuid())
+  guildId               String
+  beatmapId             String
+  difficulty            String   // beatmap version/difficulty name
+  challengerUserId      String   // Discord user ID who currently holds the challenge
+  challengerOsuId       String   // OSU user ID
+  challengerScore       Json     // Full score data from OSU API
+  originalChallengerUserId String // Discord user ID who originally issued the challenge
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt // Last time the champion changed
 
   @@unique([guildId, beatmapId, difficulty])
   @@index([guildId])

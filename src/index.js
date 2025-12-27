@@ -6,6 +6,7 @@ import {
   Events,
   PermissionsBitField,
 } from 'discord.js';
+import cron from 'node-cron';
 import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, disconnect } from './db.js';
@@ -746,6 +747,193 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   } catch (err) {
     console.error('Reaction handling error:', err);
   }
+});
+
+// Helper: format challenge entry for weekly update
+async function formatChallengeEntry(challenge) {
+  try {
+    const score = challenge.challengerScore;
+    if (!score || typeof score !== 'object') {
+      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}>`;
+    }
+    
+    const mapTitle = await getMapTitle(score);
+    const difficultyLabel = `${mapTitle} [${challenge.difficulty}]`;
+    const beatmapLink = formatBeatmapLink(score);
+    
+    if (beatmapLink) {
+      return `[${difficultyLabel}](${beatmapLink}) - <@${challenge.challengerUserId}>`;
+    }
+    return `**${difficultyLabel}** - <@${challenge.challengerUserId}>`;
+  } catch (error) {
+    console.error('Error formatting challenge entry:', error);
+    return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}>`;
+  }
+}
+
+// Weekly update function - processes challenges for a specific guild only
+// This ensures stats are not mixed between different Discord servers
+async function generateWeeklyUpdate(guildId) {
+  try {
+    // Get challenges from last 30 days for this specific guild only
+    const challenges = await activeChallenges.getChallengesInLast30Days(guildId);
+    if (challenges.length === 0) {
+      return null; // No challenges to report
+    }
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Categorize challenges (all from this guild only)
+    const newChampions = [];
+    const uncontestedChallenges = [];
+
+    for (const challenge of challenges) {
+      // Verify challenge belongs to this guild (safety check)
+      if (challenge.guildId !== guildId) {
+        console.warn(`Challenge ${challenge.id} has mismatched guildId. Expected ${guildId}, got ${challenge.guildId}`);
+        continue;
+      }
+
+      const createdAt = new Date(challenge.createdAt);
+      const updatedAt = new Date(challenge.updatedAt);
+      
+      // New champions: ownership changed in last 30 days (updatedAt is recent and different from createdAt)
+      if (updatedAt >= thirtyDaysAgo && updatedAt.getTime() !== createdAt.getTime()) {
+        newChampions.push(challenge);
+      }
+      // Uncontested: created in last 30 days, no responses (challengerUserId === originalChallengerUserId and updatedAt === createdAt)
+      else if (createdAt >= thirtyDaysAgo && challenge.challengerUserId === challenge.originalChallengerUserId && updatedAt.getTime() === createdAt.getTime()) {
+        uncontestedChallenges.push(challenge);
+      }
+    }
+
+    // Get all challenges for defense streaks (not just last 30 days) - for this guild only
+    const allChallenges = await activeChallenges.getAllChallengesForDefenseStreaks(guildId);
+    const allDefenseStreaks = allChallenges.filter(challenge => {
+      // Verify challenge belongs to this guild (safety check)
+      if (challenge.guildId !== guildId) {
+        console.warn(`Challenge ${challenge.id} has mismatched guildId. Expected ${guildId}, got ${challenge.guildId}`);
+        return false;
+      }
+      const createdAt = new Date(challenge.createdAt);
+      const updatedAt = new Date(challenge.updatedAt);
+      return updatedAt.getTime() === createdAt.getTime(); // Never changed ownership
+    });
+    
+    // Sort defense streaks by creation date (oldest first = longest defense)
+    allDefenseStreaks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const topDefenseStreaks = allDefenseStreaks.slice(0, 5);
+
+    // Format entries
+    const newChampionsEntries = await Promise.all(newChampions.map(formatChallengeEntry));
+    const uncontestedEntries = await Promise.all(uncontestedChallenges.map(formatChallengeEntry));
+    const defenseStreakEntries = await Promise.all(topDefenseStreaks.map(formatChallengeEntry));
+
+    // Build message sections
+    const sections = [];
+    
+    if (newChampionsEntries.length > 0) {
+      sections.push('🏆 **New champions:**');
+      sections.push(...newChampionsEntries);
+      sections.push(''); // Empty line
+    }
+
+    if (uncontestedEntries.length > 0) {
+      sections.push('🫵 **New uncontested challenges:**');
+      sections.push(...uncontestedEntries);
+      sections.push(''); // Empty line
+    }
+
+    if (defenseStreakEntries.length > 0) {
+      sections.push('🛡️ **Longest defence streak:**');
+      sections.push(...defenseStreakEntries);
+    }
+
+    if (sections.length === 0) {
+      return null; // No content to show
+    }
+
+    // Build final message
+    const header = '**TETO WEEKLY UPDATE!**\n\n';
+    let message = header + sections.join('\n');
+
+    // Discord message limit is 2000 characters
+    const MAX_MESSAGE_LENGTH = 2000;
+    const messages = [];
+    
+    if (message.length <= MAX_MESSAGE_LENGTH) {
+      messages.push(message);
+    } else {
+      // Split into multiple messages
+      let currentMessage = header;
+      
+      for (const section of sections) {
+        const testMessage = currentMessage + (currentMessage === header ? '' : '\n') + section;
+        
+        if (testMessage.length > MAX_MESSAGE_LENGTH) {
+          // Current message is full, start a new one
+          if (currentMessage !== header) {
+            messages.push(currentMessage);
+          }
+          currentMessage = header + section;
+        } else {
+          currentMessage = testMessage;
+        }
+      }
+      
+      if (currentMessage !== header) {
+        messages.push(currentMessage);
+      }
+    }
+
+    return messages;
+  } catch (error) {
+    console.error('Error generating weekly update:', error);
+    return null;
+  }
+}
+
+// Weekly update cron job - runs every Saturday at 16:00 (4 PM)
+// Cron expression: "0 16 * * 6" = minute 0, hour 16, any day of month, any month, day 6 (Saturday)
+// IMPORTANT: Each guild is processed independently - stats are never mixed between guilds
+cron.schedule('0 16 * * 6', async () => {
+  console.log('Running weekly update...');
+  
+  try {
+    // Get all guild IDs that have challenges
+    const guildIds = await activeChallenges.getAllGuildIds();
+
+    // Process each guild separately to ensure stats are not mixed
+    for (const guildId of guildIds) {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        if (!guild) continue;
+
+        const opChannelResult = await getOperatingChannel(guildId, guild, 'challenges');
+        if (opChannelResult.error || !opChannelResult.channel) {
+          console.log(`Skipping guild ${guildId}: ${opChannelResult.error || 'No challenges channel configured'}`);
+          continue;
+        }
+
+        const messages = await generateWeeklyUpdate(guildId);
+        if (messages && messages.length > 0) {
+          for (const message of messages) {
+            await opChannelResult.channel.send(message);
+          }
+          console.log(`Weekly update posted for guild ${guildId}`);
+        } else {
+          console.log(`No weekly update content for guild ${guildId}`);
+        }
+      } catch (error) {
+        console.error(`Error posting weekly update for guild ${guildId}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('Error in weekly update cron job:', error);
+  }
+}, {
+  timezone: 'UTC' // Run at 16:00 UTC
 });
 
 // DAILY RESET: clean up old submission entries at midnight UTC
