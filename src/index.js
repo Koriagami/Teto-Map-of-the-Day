@@ -35,10 +35,12 @@ function todayString() {
 }
 
 // Helper: get operating channel with validation
-async function getOperatingChannel(guildId, guild) {
-  const opChannelId = await dbServerConfig.get(guildId);
+// channelType: 'tmotd' for Teto Map of the Day, 'challenges' for Challenges
+async function getOperatingChannel(guildId, guild, channelType) {
+  const opChannelId = await dbServerConfig.getChannelId(guildId, channelType);
   if (!opChannelId) {
-    return { error: 'Teto is not set up yet. Ask an admin to use /teto setup.' };
+    const channelTypeName = channelType === 'tmotd' ? 'TMOTD' : 'Challenges';
+    return { error: `${channelTypeName} channel is not set up yet. Ask an admin to use /teto setup.` };
   }
 
   try {
@@ -262,7 +264,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const respondForMapLink = interaction.options.getString('respond_for_map_link');
 
       // Get operational channel for challenge announcements
-      const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
+      const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'challenges');
       if (opChannelResult.error) {
         return interaction.editReply({ 
           content: opChannelResult.error,
@@ -504,8 +506,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
     }
-    await dbServerConfig.set(guildId, channel.id);
-    return interaction.reply({ content: `Teto configured! Operating channel set to <#${channel.id}>.`, ephemeral: true });
+    
+    const channelType = interaction.options.getString('set_this_channel_for');
+    if (!channelType || (channelType !== 'tmotd' && channelType !== 'challenges')) {
+      return interaction.reply({ 
+        content: 'Invalid channel type. Please select either "TMOTD" or "Challenges".', 
+        ephemeral: true 
+      });
+    }
+    
+    await dbServerConfig.setChannel(guildId, channelType, channel.id);
+    
+    const channelTypeName = channelType === 'tmotd' ? 'TMOTD' : 'Challenges';
+    return interaction.reply({ 
+      content: `Teto configured! ${channelTypeName} channel set to <#${channel.id}>.`, 
+      ephemeral: true 
+    });
   }
 
   // /teto link
@@ -609,8 +625,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (mod) mods.push(mod);
     }
 
-    // fetch op channel
-    const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
+    // fetch op channel for TMOTD
+    const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'tmotd');
     if (opChannelResult.error) {
       return interaction.reply({ content: opChannelResult.error, ephemeral: true });
     }
@@ -651,9 +667,15 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     if (!msg || !msg.guildId) return;
     if (reaction.emoji.name !== '👎') return;
 
-    // Only monitor reactions in operating channels
-    const opChannelId = await dbServerConfig.get(msg.guildId);
-    if (!opChannelId || msg.channelId !== opChannelId) return;
+    // Only monitor reactions in operating channels (check both TMOTD and Challenges channels)
+    const config = await dbServerConfig.get(msg.guildId);
+    if (!config) return;
+    
+    const tmotdChannelId = config.tmotdChannelId;
+    const challengesChannelId = config.challengesChannelId;
+    
+    // Check if message is in either operating channel
+    if (msg.channelId !== tmotdChannelId && msg.channelId !== challengesChannelId) return;
 
     // Skip if message was already edited (contains "voted to be meh")
     if (msg.content.includes('voted to be meh')) return;

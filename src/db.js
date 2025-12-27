@@ -13,14 +13,37 @@ export const serverConfig = {
     const config = await prisma.serverConfig.findUnique({
       where: { guildId },
     });
-    return config?.operatingChannelId || null;
+    return config || null;
   },
 
-  async set(guildId, operatingChannelId) {
+  async getChannelId(guildId, channelType) {
+    const config = await prisma.serverConfig.findUnique({
+      where: { guildId },
+    });
+    if (!config) return null;
+    
+    if (channelType === 'tmotd') {
+      return config.tmotdChannelId || null;
+    } else if (channelType === 'challenges') {
+      return config.challengesChannelId || null;
+    }
+    return null;
+  },
+
+  async setChannel(guildId, channelType, channelId) {
+    const updateData = {};
+    if (channelType === 'tmotd') {
+      updateData.tmotdChannelId = channelId;
+    } else if (channelType === 'challenges') {
+      updateData.challengesChannelId = channelId;
+    } else {
+      throw new Error(`Invalid channel type: ${channelType}`);
+    }
+
     return prisma.serverConfig.upsert({
       where: { guildId },
-      update: { operatingChannelId, updatedAt: new Date() },
-      create: { guildId, operatingChannelId },
+      update: { ...updateData, updatedAt: new Date() },
+      create: { guildId, ...updateData },
     });
   },
 

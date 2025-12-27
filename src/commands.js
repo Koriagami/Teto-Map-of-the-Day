@@ -9,6 +9,16 @@ const mapSubmit = new SlashCommandBuilder()
     sub
       .setName('setup')
       .setDescription('Setup the bot in the current channel (admin only)')
+      .addStringOption(opt =>
+        opt
+          .setName('set_this_channel_for')
+          .setDescription('What this channel should be used for')
+          .setRequired(true)
+          .addChoices(
+            { name: 'TMOTD', value: 'tmotd' },
+            { name: 'Challenges', value: 'challenges' }
+          )
+      )
   )
   .addSubcommand(sub =>
     sub
