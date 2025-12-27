@@ -474,7 +474,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       const responseMessage = `<@${userId}> has responded to the challenge on **${difficultyLabel}**!\nLet's see who is better!\n\n${comparison}`;
 
-      return interaction.editReply({ content: responseMessage });
+      // Post comparison results to Challenges channel
+      await opChannel.send(responseMessage);
+
+      // Send confirmation to user
+      return interaction.editReply({ 
+        content: `Challenge response posted to <#${opChannel.id}>!`,
+        ephemeral: true 
+      });
 
     } catch (error) {
       console.error('Error in /rsc command:', error);
