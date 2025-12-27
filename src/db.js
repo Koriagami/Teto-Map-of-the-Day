@@ -224,6 +224,23 @@ export const activeChallenges = {
     }).catch(() => null); // Ignore if not found
   },
 
+  async updateChampion(guildId, beatmapId, difficulty, newChallengerUserId, newChallengerOsuId, newChallengerScore) {
+    return prisma.activeChallenge.update({
+      where: {
+        guildId_beatmapId_difficulty: {
+          guildId,
+          beatmapId,
+          difficulty,
+        },
+      },
+      data: {
+        challengerUserId: newChallengerUserId,
+        challengerOsuId: newChallengerOsuId,
+        challengerScore: newChallengerScore,
+      },
+    });
+  },
+
   async getAll(guildId) {
     return prisma.activeChallenge.findMany({
       where: { guildId },

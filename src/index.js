@@ -56,6 +56,7 @@ async function getOperatingChannel(guildId, guild, channelType) {
 }
 
 // Helper: compare two scores and format comparison table
+// Returns: { table: string, responderWins: number, challengerWins: number, totalMetrics: number }
 function compareScores(challengerScore, responderScore, responderUsername) {
   // Validate inputs
   if (!challengerScore || !responderScore || typeof challengerScore !== 'object' || typeof responderScore !== 'object') {
@@ -114,9 +115,15 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   if (scoreWinner === challengerUsername) challengerWins++; else if (scoreWinner === responderName) responderWins++;
   if (missWinner === challengerUsername) challengerWins++; else if (missWinner === responderName) responderWins++;
 
-  table += `**Winner:** ${responderWins > challengerWins ? responderName : responderWins < challengerWins ? challengerUsername : 'Tie'} (${Math.max(responderWins, challengerWins)}/${challengerWins + responderWins} stats)`;
+  const totalMetrics = challengerWins + responderWins; // Ties don't count
+  table += `**Winner:** ${responderWins > challengerWins ? responderName : responderWins < challengerWins ? challengerUsername : 'Tie'} (${Math.max(responderWins, challengerWins)}/${totalMetrics} stats)`;
 
-  return table;
+  return {
+    table,
+    responderWins,
+    challengerWins,
+    totalMetrics
+  };
 }
 
 // Helper: format beatmap link from score object
@@ -461,9 +468,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const difficultyLabel = `${mapTitle} [${challengeDifficulty}]`;
 
       // Compare scores and create comparison table
-      let comparison;
+      let comparisonResult;
       try {
-        comparison = compareScores(challengerScore, responderScore, interaction.user.username);
+        comparisonResult = compareScores(challengerScore, responderScore, interaction.user.username);
       } catch (error) {
         console.error('Error comparing scores:', error);
         return interaction.editReply({ 
@@ -472,7 +479,37 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      const responseMessage = `<@${userId}> has responded to the challenge on **${difficultyLabel}**!\nLet's see who is better!\n\n${comparison}`;
+      const { table: comparison, responderWins, challengerWins, totalMetrics } = comparisonResult;
+      
+      // Check if responder wins (3+ out of 5 metrics)
+      const responderWon = responderWins >= 3;
+      
+      // Update challenge if responder becomes new champion
+      if (responderWon) {
+        try {
+          await activeChallenges.updateChampion(
+            guildId,
+            existingChallenge.beatmapId,
+            challengeDifficulty,
+            userId,
+            osuUserId,
+            responderScore
+          );
+        } catch (error) {
+          console.error('Error updating challenge champion:', error);
+          // Continue even if update fails - we'll still show the comparison
+        }
+      }
+
+      // Build response message with win/loss status
+      let statusMessage = '';
+      if (responderWon) {
+        statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
+      } else {
+        statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
+      }
+
+      const responseMessage = `<@${userId}> has responded to the challenge on **${difficultyLabel}**!\nLet's see who is better!\n\n${comparison}${statusMessage}`;
 
       // Post comparison results to Challenges channel
       await opChannel.send(responseMessage);
