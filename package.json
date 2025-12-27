@@ -1,19 +1,29 @@
 {
-  "name": "teto-map-of-the-day",
+  "name": "teto-bot",
   "version": "1.0.0",
-  "description": "Discord bot: Teto Map of the Day - submit osu! maps and vote",
+  "description": "Discord bot: Teto Bot - submit osu! maps and vote",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "deploy-commands": "node src/deploy-commands.js"
+    "postinstall": "prisma generate",
+    "start": "node prisma/check-migration.js && prisma migrate deploy && node src/index.js",
+    "deploy-commands": "node src/deploy-commands.js",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "db:verify": "node src/verify-db.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
+    "@prisma/client": "^5.7.1",
     "discord.js": "^14.11.0",
     "node-cron": "^3.0.2",
     "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.7.1"
   }
 }

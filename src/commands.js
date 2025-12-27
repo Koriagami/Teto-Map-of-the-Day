@@ -10,6 +10,17 @@ const mapSubmit = new SlashCommandBuilder()
       .setName('setup')
       .setDescription('Setup the bot in the current channel (admin only)')
   )
+  .addSubcommand(sub =>
+    sub
+      .setName('link')
+      .setDescription('Link your Discord account to your OSU! profile')
+      .addStringOption(opt =>
+        opt
+          .setName('profilelink')
+          .setDescription('Link to your OSU! profile')
+          .setRequired(true)
+      )
+  )
   .addSubcommandGroup(group => {
     const g = group
       .setName('map')
@@ -38,22 +49,14 @@ const mapSubmit = new SlashCommandBuilder()
     return g;
   });
 
-const testCommand = new SlashCommandBuilder()
-  .setName('test')
-  .setDescription('Test OSU! API - Get leaderboard scores for a beatmap')
+const rscCommand = new SlashCommandBuilder()
+  .setName('rsc')
+  .setDescription('Issue or respond to a score challenge')
   .addStringOption(opt =>
     opt
-      .setName('maplink')
-      .setDescription('OSU! beatmap link or beatmap ID')
-      .setRequired(true)
-  )
-  .addIntegerOption(opt =>
-    opt
-      .setName('limit')
-      .setDescription('Number of scores to retrieve (default: 10, max: 100)')
+      .setName('respond_for_map_link')
+      .setDescription('Link to OSU! beatmap to respond to challenge (must contain osu.ppy.sh)')
       .setRequired(false)
-      .setMinValue(1)
-      .setMaxValue(100)
   );
 
-export const commands = [mapSubmit.toJSON(), testCommand.toJSON()];
+export const commands = [mapSubmit.toJSON(), rscCommand.toJSON()];
