@@ -232,15 +232,16 @@ function extractOsuProfile(profileLink) {
     return null;
   }
 
-  // Try /users/{id} format
+  // Try /users/{id} format (numeric ID)
   const usersMatch = profileLink.match(/osu\.ppy\.sh\/users\/(\d+)/);
   if (usersMatch) {
     return { userId: usersMatch[1], username: null, profileLink };
   }
 
-  // Try /users/{username} format
+  // Try /users/{username} format (non-numeric username)
+  // Match anything that's not all digits
   const usernameMatch = profileLink.match(/osu\.ppy\.sh\/users\/([^\/\?#]+)/);
-  if (usernameMatch) {
+  if (usernameMatch && !/^\d+$/.test(usernameMatch[1])) {
     return { userId: null, username: usernameMatch[1], profileLink };
   }
 
@@ -850,7 +851,11 @@ async function generateWeeklyUpdate(guildId) {
         newChampions.push(challenge);
       }
       // Uncontested: created in last 30 days, no responses (challengerUserId === originalChallengerUserId and updatedAt === createdAt)
-      else if (createdAt >= thirtyDaysAgo && challenge.challengerUserId === challenge.originalChallengerUserId && updatedAt.getTime() === createdAt.getTime()) {
+      // Safety check: originalChallengerUserId might be null for old challenges before migration
+      else if (createdAt >= thirtyDaysAgo && 
+               challenge.originalChallengerUserId && 
+               challenge.challengerUserId === challenge.originalChallengerUserId && 
+               updatedAt.getTime() === createdAt.getTime()) {
         uncontestedChallenges.push(challenge);
       }
     }
