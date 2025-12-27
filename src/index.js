@@ -5,6 +5,7 @@ import {
   Partials,
   Events,
   PermissionsBitField,
+  MessageFlags,
 } from 'discord.js';
 import cron from 'node-cron';
 import { commands } from './commands.js';
@@ -676,9 +677,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const messages = await generateWeeklyUpdate(guildId);
       
       if (messages && messages.length > 0) {
-        // Post messages to challenges channel
+        // Post messages to challenges channel (suppress embeds/thumbnails)
         for (const message of messages) {
-          await opChannelResult.channel.send(message);
+          await opChannelResult.channel.send({
+            content: message,
+            flags: MessageFlags.SuppressEmbeds,
+          });
         }
         return interaction.editReply({ 
           content: `✅ Weekly challenges report posted to <#${opChannelResult.channel.id}>!`,
@@ -1020,8 +1024,12 @@ cron.schedule('0 16 * * 6', async () => {
 
         const messages = await generateWeeklyUpdate(guildId);
         if (messages && messages.length > 0) {
+          // Post messages with embeds suppressed (no thumbnails)
           for (const message of messages) {
-            await opChannelResult.channel.send(message);
+            await opChannelResult.channel.send({
+              content: message,
+              flags: MessageFlags.SuppressEmbeds,
+            });
           }
           console.log(`Weekly update posted for guild ${guildId}`);
         } else {
