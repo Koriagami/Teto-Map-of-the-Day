@@ -819,6 +819,45 @@ async function formatChallengeEntry(challenge) {
   }
 }
 
+// Helper: format challenge entry with days held (for defense streaks)
+async function formatChallengeEntryWithDays(challenge) {
+  try {
+    const score = challenge.challengerScore;
+    if (!score || typeof score !== 'object') {
+      // Calculate days held even if score is invalid
+      const createdAt = new Date(challenge.createdAt);
+      const now = new Date();
+      const daysHeld = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}> [Held for ${daysHeld} days]`;
+    }
+    
+    const mapTitle = await getMapTitle(score);
+    const difficultyLabel = `${mapTitle} [${challenge.difficulty}]`;
+    const beatmapLink = formatBeatmapLink(score);
+    
+    // Calculate days held
+    const createdAt = new Date(challenge.createdAt);
+    const now = new Date();
+    const daysHeld = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+    
+    if (beatmapLink) {
+      return `[${difficultyLabel}](${beatmapLink}) - <@${challenge.challengerUserId}> [Held for ${daysHeld} days]`;
+    }
+    return `**${difficultyLabel}** - <@${challenge.challengerUserId}> [Held for ${daysHeld} days]`;
+  } catch (error) {
+    console.error('Error formatting challenge entry with days:', error);
+    // Fallback: try to calculate days even on error
+    try {
+      const createdAt = new Date(challenge.createdAt);
+      const now = new Date();
+      const daysHeld = Math.floor((now - createdAt) / (1000 * 60 * 60 * 24));
+      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}> [Held for ${daysHeld} days]`;
+    } catch {
+      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}>`;
+    }
+  }
+}
+
 // Weekly update function - processes challenges for a specific guild only
 // This ensures stats are not mixed between different Discord servers
 async function generateWeeklyUpdate(guildId) {
@@ -880,7 +919,7 @@ async function generateWeeklyUpdate(guildId) {
     // Format entries
     const newChampionsEntries = await Promise.all(newChampions.map(formatChallengeEntry));
     const uncontestedEntries = await Promise.all(uncontestedChallenges.map(formatChallengeEntry));
-    const defenseStreakEntries = await Promise.all(topDefenseStreaks.map(formatChallengeEntry));
+    const defenseStreakEntries = await Promise.all(topDefenseStreaks.map(formatChallengeEntryWithDays));
 
     // Build message sections
     const sections = [];
@@ -906,36 +945,47 @@ async function generateWeeklyUpdate(guildId) {
       return null; // No content to show
     }
 
-    // Build final message
+    // Build final message with separators
+    const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const header = '**TETO WEEKLY UPDATE!**\n\n';
-    let message = header + sections.join('\n');
-
+    const content = sections.join('\n');
+    
     // Discord message limit is 2000 characters
     const MAX_MESSAGE_LENGTH = 2000;
     const messages = [];
     
-    if (message.length <= MAX_MESSAGE_LENGTH) {
-      messages.push(message);
+    // Calculate separator overhead (top separator + newline + bottom separator + newline)
+    const separatorOverhead = separator.length + 1 + separator.length + 1; // \n after each separator
+    
+    // Check if single message fits
+    const fullMessage = `${separator}\n${header}${content}\n${separator}`;
+    if (fullMessage.length <= MAX_MESSAGE_LENGTH) {
+      messages.push(fullMessage);
     } else {
-      // Split into multiple messages
-      let currentMessage = header;
+      // Split into multiple messages, each with separators
+      let currentContent = header;
       
       for (const section of sections) {
-        const testMessage = currentMessage + (currentMessage === header ? '' : '\n') + section;
+        const testContent = currentContent + (currentContent === header ? '' : '\n') + section;
+        const testMessage = `${separator}\n${testContent}\n${separator}`;
         
         if (testMessage.length > MAX_MESSAGE_LENGTH) {
-          // Current message is full, start a new one
-          if (currentMessage !== header) {
-            messages.push(currentMessage);
+          // Current message is full, finalize it with separators
+          if (currentContent !== header) {
+            const finalizedMessage = `${separator}\n${currentContent}\n${separator}`;
+            messages.push(finalizedMessage);
           }
-          currentMessage = header + section;
+          // Start a new message with header
+          currentContent = header + section;
         } else {
-          currentMessage = testMessage;
+          currentContent = testContent;
         }
       }
       
-      if (currentMessage !== header) {
-        messages.push(currentMessage);
+      // Finalize the last message with separators
+      if (currentContent !== header) {
+        const finalizedMessage = `${separator}\n${currentContent}\n${separator}`;
+        messages.push(finalizedMessage);
       }
     }
 
