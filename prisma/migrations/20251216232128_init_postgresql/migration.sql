@@ -59,3 +59,4 @@ CREATE INDEX "user_associations_osuUsername_idx" ON "user_associations"("osuUser
 
 
 
+

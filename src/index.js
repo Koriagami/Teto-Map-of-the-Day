@@ -82,7 +82,7 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   const challengerMiss = challengerScore.statistics?.count_miss || 0;
   const responderMiss = responderScore.statistics?.count_miss || 0;
 
-  // Determine winners
+  // Determine winners (only for metrics that count toward final winner)
   const ppWinner = responderPP > challengerPP ? responderName : (responderPP < challengerPP ? challengerUsername : 'Tie');
   const accWinner = responderAcc > challengerAcc ? responderName : (responderAcc < challengerAcc ? challengerUsername : 'Tie');
   const comboWinner = responderCombo > challengerCombo ? responderName : (responderCombo < challengerCombo ? challengerUsername : 'Tie');
@@ -97,13 +97,13 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   table += `Accuracy          | ${challengerAcc.toFixed(2).padStart(16)}% ${responderAcc < challengerAcc ? '🏆' : ''} | ${responderAcc.toFixed(2).padStart(16)}% ${responderAcc > challengerAcc ? '🏆' : ''}\n`;
   table += `Max Combo         | ${challengerCombo.toString().padStart(17)} ${responderCombo < challengerCombo ? '🏆' : ''} | ${responderCombo.toString().padStart(17)} ${responderCombo > challengerCombo ? '🏆' : ''}\n`;
   table += `Score             | ${challengerScoreValue.toLocaleString().padStart(17)} ${responderScoreValue < challengerScoreValue ? '🏆' : ''} | ${responderScoreValue.toLocaleString().padStart(17)} ${responderScoreValue > challengerScoreValue ? '🏆' : ''}\n`;
-  table += `300s              | ${challenger300.toString().padStart(17)} ${responder300 < challenger300 ? '🏆' : ''} | ${responder300.toString().padStart(17)} ${responder300 > challenger300 ? '🏆' : ''}\n`;
-  table += `100s              | ${challenger100.toString().padStart(17)} ${responder100 > challenger100 ? '🏆' : ''} | ${responder100.toString().padStart(17)} ${responder100 < challenger100 ? '🏆' : ''}\n`;
-  table += `50s               | ${challenger50.toString().padStart(17)} ${responder50 > challenger50 ? '🏆' : ''} | ${responder50.toString().padStart(17)} ${responder50 < challenger50 ? '🏆' : ''}\n`;
   table += `Misses            | ${challengerMiss.toString().padStart(17)} ${responderMiss > challengerMiss ? '🏆' : ''} | ${responderMiss.toString().padStart(17)} ${responderMiss < challengerMiss ? '🏆' : ''}\n`;
+  table += `300s              | ${challenger300.toString().padStart(17)} | ${responder300.toString().padStart(17)}\n`;
+  table += `100s              | ${challenger100.toString().padStart(17)} | ${responder100.toString().padStart(17)}\n`;
+  table += `50s               | ${challenger50.toString().padStart(17)} | ${responder50.toString().padStart(17)}\n`;
   table += '```\n\n';
 
-  // Summary
+  // Summary (only count metrics with winners: PP, Accuracy, Max Combo, Score, Misses)
   let challengerWins = 0;
   let responderWins = 0;
   if (ppWinner === challengerUsername) challengerWins++; else if (ppWinner === responderName) responderWins++;
