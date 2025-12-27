@@ -1030,38 +1030,76 @@ async function generateWeeklyUpdate(guildId) {
     const MAX_MESSAGE_LENGTH = 2000;
     const messages = [];
     
-    // Calculate separator overhead (top separator + newline + bottom separator + newline)
-    const separatorOverhead = separator.length + 1 + separator.length + 1; // \n after each separator
+    // Build full content with header
+    const fullContent = header + content;
     
-    // Check if single message fits
-    const fullMessage = `${separator}\n${header}${content}\n${separator}`;
-    if (fullMessage.length <= MAX_MESSAGE_LENGTH) {
-      messages.push(fullMessage);
+    // Check if single message fits (with separators at start and end)
+    const separatorWithNewline = separator + '\n';
+    const separatorLength = separatorWithNewline.length;
+    const singleMessage = `${separatorWithNewline}${fullContent}\n${separator}`;
+    
+    if (singleMessage.length <= MAX_MESSAGE_LENGTH) {
+      // Fits in one message - add separators at start and end
+      messages.push(singleMessage);
     } else {
-      // Split into multiple messages, each with separators
-      let currentContent = header;
+      // Split by lines, trying to fit maximum number of lines per message
+      const lines = fullContent.split('\n');
+      const headerLines = header.split('\n');
+      const contentLines = content.split('\n');
       
-      for (const section of sections) {
-        const testContent = currentContent + (currentContent === header ? '' : '\n') + section;
-        const testMessage = `${separator}\n${testContent}\n${separator}`;
+      let currentLines = [];
+      let isFirstMessage = true;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const testLines = [...currentLines, line];
+        const testContent = testLines.join('\n');
         
-        if (testMessage.length > MAX_MESSAGE_LENGTH) {
-          // Current message is full, finalize it with separators
-          if (currentContent !== header) {
-            const finalizedMessage = `${separator}\n${currentContent}\n${separator}`;
-            messages.push(finalizedMessage);
-          }
-          // Start a new message with header
-          currentContent = header + section;
+        // Calculate message length accounting for separators
+        let testMessageLength;
+        if (isFirstMessage && i === lines.length - 1) {
+          // Only one message: separator at start and end
+          testMessageLength = separatorLength + testContent.length + separatorLength;
+        } else if (isFirstMessage) {
+          // First message: separator at start only
+          testMessageLength = separatorLength + testContent.length;
+        } else if (i === lines.length - 1) {
+          // Last message: separator at end only
+          testMessageLength = testContent.length + separatorLength;
         } else {
-          currentContent = testContent;
+          // Middle message: no separators
+          testMessageLength = testContent.length;
+        }
+        
+        if (testMessageLength > MAX_MESSAGE_LENGTH && currentLines.length > 0) {
+          // Current message is full, finalize it
+          const finalizedContent = currentLines.join('\n');
+          if (isFirstMessage) {
+            // First message: separator at start
+            messages.push(`${separatorWithNewline}${finalizedContent}`);
+            isFirstMessage = false;
+          } else {
+            // Middle message: no separators, no header
+            messages.push(finalizedContent);
+          }
+          // Start a new message with current line
+          currentLines = [line];
+        } else {
+          // Add line to current message
+          currentLines.push(line);
         }
       }
       
-      // Finalize the last message with separators
-      if (currentContent !== header) {
-        const finalizedMessage = `${separator}\n${currentContent}\n${separator}`;
-        messages.push(finalizedMessage);
+      // Finalize the last message with separator at end
+      if (currentLines.length > 0) {
+        const finalizedContent = currentLines.join('\n');
+        if (isFirstMessage) {
+          // Only one message: separator at start and end
+          messages.push(`${separatorWithNewline}${finalizedContent}\n${separator}`);
+        } else {
+          // Last of multiple messages: separator only at end
+          messages.push(`${finalizedContent}\n${separator}`);
+        }
       }
     }
 
