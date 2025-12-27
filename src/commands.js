@@ -9,6 +9,16 @@ const mapSubmit = new SlashCommandBuilder()
     sub
       .setName('setup')
       .setDescription('Setup the bot in the current channel (admin only)')
+      .addStringOption(opt =>
+        opt
+          .setName('set_this_channel_for')
+          .setDescription('What this channel should be used for')
+          .setRequired(true)
+          .addChoices(
+            { name: 'TMOTD', value: 'tmotd' },
+            { name: 'Challenges', value: 'challenges' }
+          )
+      )
   )
   .addSubcommand(sub =>
     sub
@@ -20,6 +30,11 @@ const mapSubmit = new SlashCommandBuilder()
           .setDescription('Link to your OSU! profile')
           .setRequired(true)
       )
+  )
+  .addSubcommand(sub =>
+    sub
+      .setName('get_c_report')
+      .setDescription('Generate and post the weekly challenges report (admin only)')
   )
   .addSubcommandGroup(group => {
     const g = group

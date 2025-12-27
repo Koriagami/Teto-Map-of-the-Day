@@ -6,6 +6,7 @@ import {
   Events,
   PermissionsBitField,
 } from 'discord.js';
+import cron from 'node-cron';
 import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, disconnect } from './db.js';
@@ -35,10 +36,12 @@ function todayString() {
 }
 
 // Helper: get operating channel with validation
-async function getOperatingChannel(guildId, guild) {
-  const opChannelId = await dbServerConfig.get(guildId);
+// channelType: 'tmotd' for Teto Map of the Day, 'challenges' for Challenges
+async function getOperatingChannel(guildId, guild, channelType) {
+  const opChannelId = await dbServerConfig.getChannelId(guildId, channelType);
   if (!opChannelId) {
-    return { error: 'Teto is not set up yet. Ask an admin to use /teto setup.' };
+    const channelTypeName = channelType === 'tmotd' ? 'TMOTD' : 'Challenges';
+    return { error: `${channelTypeName} channel is not set up yet. Ask an admin to use /teto setup.` };
   }
 
   try {
@@ -54,6 +57,7 @@ async function getOperatingChannel(guildId, guild) {
 }
 
 // Helper: compare two scores and format comparison table
+// Returns: { table: string, responderWins: number, challengerWins: number, totalMetrics: number }
 function compareScores(challengerScore, responderScore, responderUsername) {
   // Validate inputs
   if (!challengerScore || !responderScore || typeof challengerScore !== 'object' || typeof responderScore !== 'object') {
@@ -112,9 +116,15 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   if (scoreWinner === challengerUsername) challengerWins++; else if (scoreWinner === responderName) responderWins++;
   if (missWinner === challengerUsername) challengerWins++; else if (missWinner === responderName) responderWins++;
 
-  table += `**Winner:** ${responderWins > challengerWins ? responderName : responderWins < challengerWins ? challengerUsername : 'Tie'} (${Math.max(responderWins, challengerWins)}/${challengerWins + responderWins} stats)`;
+  const totalMetrics = challengerWins + responderWins; // Ties don't count
+  table += `**Winner:** ${responderWins > challengerWins ? responderName : responderWins < challengerWins ? challengerUsername : 'Tie'} (${Math.max(responderWins, challengerWins)}/${totalMetrics} stats)`;
 
-  return table;
+  return {
+    table,
+    responderWins,
+    challengerWins,
+    totalMetrics
+  };
 }
 
 // Helper: format beatmap link from score object
@@ -262,7 +272,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const respondForMapLink = interaction.options.getString('respond_for_map_link');
 
       // Get operational channel for challenge announcements
-      const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
+      const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'challenges');
       if (opChannelResult.error) {
         return interaction.editReply({ 
           content: opChannelResult.error,
@@ -459,9 +469,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const difficultyLabel = `${mapTitle} [${challengeDifficulty}]`;
 
       // Compare scores and create comparison table
-      let comparison;
+      let comparisonResult;
       try {
-        comparison = compareScores(challengerScore, responderScore, interaction.user.username);
+        comparisonResult = compareScores(challengerScore, responderScore, interaction.user.username);
       } catch (error) {
         console.error('Error comparing scores:', error);
         return interaction.editReply({ 
@@ -470,9 +480,46 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      const responseMessage = `<@${userId}> has responded to the challenge on **${difficultyLabel}**!\nLet's see who is better!\n\n${comparison}`;
+      const { table: comparison, responderWins, challengerWins, totalMetrics } = comparisonResult;
+      
+      // Check if responder wins (3+ out of 5 metrics)
+      const responderWon = responderWins >= 3;
+      
+      // Update challenge if responder becomes new champion
+      if (responderWon) {
+        try {
+          await activeChallenges.updateChampion(
+            guildId,
+            existingChallenge.beatmapId,
+            challengeDifficulty,
+            userId,
+            osuUserId,
+            responderScore
+          );
+        } catch (error) {
+          console.error('Error updating challenge champion:', error);
+          // Continue even if update fails - we'll still show the comparison
+        }
+      }
 
-      return interaction.editReply({ content: responseMessage });
+      // Build response message with win/loss status
+      let statusMessage = '';
+      if (responderWon) {
+        statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
+      } else {
+        statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
+      }
+
+      const responseMessage = `<@${userId}> has responded to the challenge on **${difficultyLabel}**!\nLet's see who is better!\n\n${comparison}${statusMessage}`;
+
+      // Post comparison results to Challenges channel
+      await opChannel.send(responseMessage);
+
+      // Send confirmation to user
+      return interaction.editReply({ 
+        content: `Challenge response posted to <#${opChannel.id}>!`,
+        ephemeral: true 
+      });
 
     } catch (error) {
       console.error('Error in /rsc command:', error);
@@ -504,8 +551,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
     }
-    await dbServerConfig.set(guildId, channel.id);
-    return interaction.reply({ content: `Teto configured! Operating channel set to <#${channel.id}>.`, ephemeral: true });
+    
+    const channelType = interaction.options.getString('set_this_channel_for');
+    if (!channelType || (channelType !== 'tmotd' && channelType !== 'challenges')) {
+      return interaction.reply({ 
+        content: 'Invalid channel type. Please select either "TMOTD" or "Challenges".', 
+        ephemeral: true 
+      });
+    }
+    
+    await dbServerConfig.setChannel(guildId, channelType, channel.id);
+    
+    const channelTypeName = channelType === 'tmotd' ? 'TMOTD' : 'Challenges';
+    return interaction.reply({ 
+      content: `Teto configured! ${channelTypeName} channel set to <#${channel.id}>.`, 
+      ephemeral: true 
+    });
   }
 
   // /teto link
@@ -590,6 +651,53 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
+  // /teto get_c_report
+  if (sub === 'get_c_report') {
+    // only admins
+    const memberPerms = interaction.memberPermissions;
+    if (!memberPerms || !memberPerms.has(PermissionsBitField.Flags.Administrator)) {
+      return interaction.reply({ content: 'Only administrators can run this command.', ephemeral: true });
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      // Get challenges channel
+      const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'challenges');
+      if (opChannelResult.error || !opChannelResult.channel) {
+        return interaction.editReply({ 
+          content: opChannelResult.error || 'Challenges channel is not configured. Use `/teto setup` to configure it.',
+          ephemeral: true 
+        });
+      }
+
+      // Generate weekly update report
+      const messages = await generateWeeklyUpdate(guildId);
+      
+      if (messages && messages.length > 0) {
+        // Post messages to challenges channel
+        for (const message of messages) {
+          await opChannelResult.channel.send(message);
+        }
+        return interaction.editReply({ 
+          content: `✅ Weekly challenges report posted to <#${opChannelResult.channel.id}>!`,
+          ephemeral: true 
+        });
+      } else {
+        return interaction.editReply({ 
+          content: 'No challenges data to report for the last 30 days.',
+          ephemeral: true 
+        });
+      }
+    } catch (error) {
+      console.error('Error generating challenges report:', error);
+      return interaction.editReply({ 
+        content: `Error generating report: ${error.message}`,
+        ephemeral: true 
+      });
+    }
+  }
+
   // /teto map submit
   if (subcommandGroup === 'map' && sub === 'submit') {
     const mapLink = interaction.options.getString('maplink');
@@ -609,8 +717,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (mod) mods.push(mod);
     }
 
-    // fetch op channel
-    const opChannelResult = await getOperatingChannel(guildId, interaction.guild);
+    // fetch op channel for TMOTD
+    const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'tmotd');
     if (opChannelResult.error) {
       return interaction.reply({ content: opChannelResult.error, ephemeral: true });
     }
@@ -651,9 +759,15 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     if (!msg || !msg.guildId) return;
     if (reaction.emoji.name !== '👎') return;
 
-    // Only monitor reactions in operating channels
-    const opChannelId = await dbServerConfig.get(msg.guildId);
-    if (!opChannelId || msg.channelId !== opChannelId) return;
+    // Only monitor reactions in operating channels (check both TMOTD and Challenges channels)
+    const config = await dbServerConfig.get(msg.guildId);
+    if (!config) return;
+    
+    const tmotdChannelId = config.tmotdChannelId;
+    const challengesChannelId = config.challengesChannelId;
+    
+    // Check if message is in either operating channel
+    if (msg.channelId !== tmotdChannelId && msg.channelId !== challengesChannelId) return;
 
     // Skip if message was already edited (contains "voted to be meh")
     if (msg.content.includes('voted to be meh')) return;
@@ -680,6 +794,193 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
   } catch (err) {
     console.error('Reaction handling error:', err);
   }
+});
+
+// Helper: format challenge entry for weekly update
+async function formatChallengeEntry(challenge) {
+  try {
+    const score = challenge.challengerScore;
+    if (!score || typeof score !== 'object') {
+      return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}>`;
+    }
+    
+    const mapTitle = await getMapTitle(score);
+    const difficultyLabel = `${mapTitle} [${challenge.difficulty}]`;
+    const beatmapLink = formatBeatmapLink(score);
+    
+    if (beatmapLink) {
+      return `[${difficultyLabel}](${beatmapLink}) - <@${challenge.challengerUserId}>`;
+    }
+    return `**${difficultyLabel}** - <@${challenge.challengerUserId}>`;
+  } catch (error) {
+    console.error('Error formatting challenge entry:', error);
+    return `**Unknown Map [${challenge.difficulty}]** - <@${challenge.challengerUserId}>`;
+  }
+}
+
+// Weekly update function - processes challenges for a specific guild only
+// This ensures stats are not mixed between different Discord servers
+async function generateWeeklyUpdate(guildId) {
+  try {
+    // Get challenges from last 30 days for this specific guild only
+    const challenges = await activeChallenges.getChallengesInLast30Days(guildId);
+    if (challenges.length === 0) {
+      return null; // No challenges to report
+    }
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Categorize challenges (all from this guild only)
+    const newChampions = [];
+    const uncontestedChallenges = [];
+
+    for (const challenge of challenges) {
+      // Verify challenge belongs to this guild (safety check)
+      if (challenge.guildId !== guildId) {
+        console.warn(`Challenge ${challenge.id} has mismatched guildId. Expected ${guildId}, got ${challenge.guildId}`);
+        continue;
+      }
+
+      const createdAt = new Date(challenge.createdAt);
+      const updatedAt = new Date(challenge.updatedAt);
+      
+      // New champions: ownership changed in last 30 days (updatedAt is recent and different from createdAt)
+      if (updatedAt >= thirtyDaysAgo && updatedAt.getTime() !== createdAt.getTime()) {
+        newChampions.push(challenge);
+      }
+      // Uncontested: created in last 30 days, no responses (challengerUserId === originalChallengerUserId and updatedAt === createdAt)
+      else if (createdAt >= thirtyDaysAgo && challenge.challengerUserId === challenge.originalChallengerUserId && updatedAt.getTime() === createdAt.getTime()) {
+        uncontestedChallenges.push(challenge);
+      }
+    }
+
+    // Get all challenges for defense streaks (not just last 30 days) - for this guild only
+    const allChallenges = await activeChallenges.getAllChallengesForDefenseStreaks(guildId);
+    const allDefenseStreaks = allChallenges.filter(challenge => {
+      // Verify challenge belongs to this guild (safety check)
+      if (challenge.guildId !== guildId) {
+        console.warn(`Challenge ${challenge.id} has mismatched guildId. Expected ${guildId}, got ${challenge.guildId}`);
+        return false;
+      }
+      const createdAt = new Date(challenge.createdAt);
+      const updatedAt = new Date(challenge.updatedAt);
+      return updatedAt.getTime() === createdAt.getTime(); // Never changed ownership
+    });
+    
+    // Sort defense streaks by creation date (oldest first = longest defense)
+    allDefenseStreaks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const topDefenseStreaks = allDefenseStreaks.slice(0, 5);
+
+    // Format entries
+    const newChampionsEntries = await Promise.all(newChampions.map(formatChallengeEntry));
+    const uncontestedEntries = await Promise.all(uncontestedChallenges.map(formatChallengeEntry));
+    const defenseStreakEntries = await Promise.all(topDefenseStreaks.map(formatChallengeEntry));
+
+    // Build message sections
+    const sections = [];
+    
+    if (newChampionsEntries.length > 0) {
+      sections.push('🏆 **New champions:**');
+      sections.push(...newChampionsEntries);
+      sections.push(''); // Empty line
+    }
+
+    if (uncontestedEntries.length > 0) {
+      sections.push('🫵 **New uncontested challenges:**');
+      sections.push(...uncontestedEntries);
+      sections.push(''); // Empty line
+    }
+
+    if (defenseStreakEntries.length > 0) {
+      sections.push('🛡️ **Longest defence streak:**');
+      sections.push(...defenseStreakEntries);
+    }
+
+    if (sections.length === 0) {
+      return null; // No content to show
+    }
+
+    // Build final message
+    const header = '**TETO WEEKLY UPDATE!**\n\n';
+    let message = header + sections.join('\n');
+
+    // Discord message limit is 2000 characters
+    const MAX_MESSAGE_LENGTH = 2000;
+    const messages = [];
+    
+    if (message.length <= MAX_MESSAGE_LENGTH) {
+      messages.push(message);
+    } else {
+      // Split into multiple messages
+      let currentMessage = header;
+      
+      for (const section of sections) {
+        const testMessage = currentMessage + (currentMessage === header ? '' : '\n') + section;
+        
+        if (testMessage.length > MAX_MESSAGE_LENGTH) {
+          // Current message is full, start a new one
+          if (currentMessage !== header) {
+            messages.push(currentMessage);
+          }
+          currentMessage = header + section;
+        } else {
+          currentMessage = testMessage;
+        }
+      }
+      
+      if (currentMessage !== header) {
+        messages.push(currentMessage);
+      }
+    }
+
+    return messages;
+  } catch (error) {
+    console.error('Error generating weekly update:', error);
+    return null;
+  }
+}
+
+// Weekly update cron job - runs every Saturday at 16:00 (4 PM)
+// Cron expression: "0 16 * * 6" = minute 0, hour 16, any day of month, any month, day 6 (Saturday)
+// IMPORTANT: Each guild is processed independently - stats are never mixed between guilds
+cron.schedule('0 16 * * 6', async () => {
+  console.log('Running weekly update...');
+  
+  try {
+    // Get all guild IDs that have challenges
+    const guildIds = await activeChallenges.getAllGuildIds();
+
+    // Process each guild separately to ensure stats are not mixed
+    for (const guildId of guildIds) {
+      try {
+        const guild = await client.guilds.fetch(guildId);
+        if (!guild) continue;
+
+        const opChannelResult = await getOperatingChannel(guildId, guild, 'challenges');
+        if (opChannelResult.error || !opChannelResult.channel) {
+          console.log(`Skipping guild ${guildId}: ${opChannelResult.error || 'No challenges channel configured'}`);
+          continue;
+        }
+
+        const messages = await generateWeeklyUpdate(guildId);
+        if (messages && messages.length > 0) {
+          for (const message of messages) {
+            await opChannelResult.channel.send(message);
+          }
+          console.log(`Weekly update posted for guild ${guildId}`);
+        } else {
+          console.log(`No weekly update content for guild ${guildId}`);
+        }
+      } catch (error) {
+        console.error(`Error posting weekly update for guild ${guildId}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('Error in weekly update cron job:', error);
+  }
+}, {
+  timezone: 'UTC' // Run at 16:00 UTC
 });
 
 // DAILY RESET: clean up old submission entries at midnight UTC

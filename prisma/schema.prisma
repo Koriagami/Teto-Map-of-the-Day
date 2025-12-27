@@ -11,11 +11,12 @@ datasource db {
 }
 
 model ServerConfig {
-  id                String   @id @default(uuid())
-  guildId           String   @unique
-  operatingChannelId String
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  guildId            String   @unique
+  tmotdChannelId     String?  // Channel for Teto Map of the Day messages
+  challengesChannelId String?  // Channel for challenge messages
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@map("server_configs")
 }
@@ -51,14 +52,16 @@ model UserAssociation {
 }
 
 model ActiveChallenge {
-  id                String   @id @default(uuid())
-  guildId           String
-  beatmapId         String
-  difficulty        String   // beatmap version/difficulty name
-  challengerUserId  String   // Discord user ID who issued the challenge
-  challengerOsuId   String   // OSU user ID
-  challengerScore   Json     // Full score data from OSU API
-  createdAt         DateTime @default(now())
+  id                    String   @id @default(uuid())
+  guildId               String
+  beatmapId             String
+  difficulty            String   // beatmap version/difficulty name
+  challengerUserId      String   // Discord user ID who currently holds the challenge
+  challengerOsuId       String   // OSU user ID
+  challengerScore       Json     // Full score data from OSU API
+  originalChallengerUserId String // Discord user ID who originally issued the challenge
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt // Last time the champion changed
 
   @@unique([guildId, beatmapId, difficulty])
   @@index([guildId])
