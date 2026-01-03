@@ -68,3 +68,4 @@ model ActiveChallenge {
   @@index([beatmapId])
   @@map("active_challenges")
 }
+
