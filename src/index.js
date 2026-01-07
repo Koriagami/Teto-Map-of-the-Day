@@ -654,8 +654,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       const osuUserId = association.osuUserId;
 
-      // Get most recent score
-      const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
+      // Get most recent score (including failed scores)
+      const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: true });
       const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
       
       if (!recentScores || recentScores.length === 0) {
