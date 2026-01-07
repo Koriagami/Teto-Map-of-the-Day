@@ -775,17 +775,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       const { beatmapId, difficulty } = beatmapInfo;
 
-      // Try to get user's score from osu! servers first
-      let userScore = null;
+      // Step 1: Check for API scores first
       try {
-        userScore = await getUserBeatmapScore(beatmapId, osuUserId);
+        const apiScore = await getUserBeatmapScore(beatmapId, osuUserId);
         
         // Check if difficulty matches
-        if (userScore && userScore.beatmap?.version === difficulty) {
+        if (apiScore && apiScore.beatmap?.version === difficulty) {
           // Found on osu! servers with matching difficulty
-          const beatmapLink = formatBeatmapLink(userScore);
-          const playerStats = formatPlayerStats(userScore);
-          const mapTitle = await getMapTitle(userScore);
+          // Note: API typically returns one score (best), but we'll format it for consistency
+          const beatmapLink = formatBeatmapLink(apiScore);
+          const playerStats = formatPlayerStats(apiScore);
+          const mapTitle = await getMapTitle(apiScore);
           const difficultyLabel = `${mapTitle} [${difficulty}]`;
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
@@ -798,24 +798,43 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // Continue to check local scores
       }
 
-      // If not found on osu! servers or difficulty doesn't match, check local scores
+      // Step 2: If not found in API, check local scores
       const localScoreRecords = await localScores.getByBeatmapAndDifficulty(guildId, userId, beatmapId, difficulty);
       
       if (localScoreRecords && localScoreRecords.length > 0) {
-        // Use the most recent local score
-        const localScore = localScoreRecords[0].score;
-        const beatmapLink = formatBeatmapLink(localScore);
-        const playerStats = formatPlayerStats(localScore);
-        const mapTitle = await getMapTitle(localScore);
+        // Sort by creation date (most recent first) and limit to 8
+        const sortedRecords = localScoreRecords
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .slice(0, 8);
+
+        // Get map info from first score
+        const firstScore = sortedRecords[0].score;
+        const beatmapLink = formatBeatmapLink(firstScore);
+        const mapTitle = await getMapTitle(firstScore);
         const difficultyLabel = `${mapTitle} [${difficulty}]`;
         const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
+        // Build message with all local scores
+        let message = `Your scores on ${difficultyLink} (from local storage):\n\n`;
+        
+        for (let i = 0; i < sortedRecords.length; i++) {
+          const record = sortedRecords[i];
+          const playerStats = formatPlayerStats(record.score);
+          
+          message += `**Score #${i + 1}**\n${playerStats}`;
+          
+          // Add separator between scores (except for the last one)
+          if (i < sortedRecords.length - 1) {
+            message += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+          }
+        }
+
         return interaction.editReply({ 
-          content: `Your score on ${difficultyLink} (from local storage):\n\n${playerStats}`
+          content: message
         });
       }
 
-      // No score found in either place
+      // Step 3: No score found in either place
       return interaction.editReply({ 
         content: `No score found for difficulty **${difficulty}** on this beatmap. Play it first!`,
         ephemeral: true 

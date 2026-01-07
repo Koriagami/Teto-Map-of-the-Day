@@ -76,10 +76,10 @@ const rscCommand = new SlashCommandBuilder()
 
 const trsCommand = new SlashCommandBuilder()
   .setName('trs')
-  .setDescription('Track your most recent osu! score');
+  .setDescription('Record your unranked scores');
 
 const tcCommand = new SlashCommandBuilder()
   .setName('tc')
-  .setDescription('Track your score for a difficulty mentioned in recent messages');
+  .setDescription('Look up your scores for the map');
 
 export const commands = [mapSubmit.toJSON(), rscCommand.toJSON(), trsCommand.toJSON(), tcCommand.toJSON()];
