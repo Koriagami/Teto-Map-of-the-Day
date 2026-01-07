@@ -268,9 +268,22 @@ function extractBeatmapInfoFromMessage(messageContent) {
     beatmapId = extractBeatmapId(linkUrl);
     
     // Extract difficulty from link text: "Map Title [Difficulty]"
+    // Match the last [bracketed] content - need to handle nested brackets
+    // Use a more robust approach: find the last [ that's not part of a markdown link
+    // Pattern: find [text] at the end, but handle cases where difficulty might contain brackets
+    // Try to match the last bracket pair that's not followed by (
     const difficultyMatch = linkText.match(/\[([^\]]+)\]$/);
     if (difficultyMatch) {
       difficulty = difficultyMatch[1];
+      console.log(`[DEBUG extractBeatmapInfoFromMessage] Extracted difficulty: "${difficulty}" from linkText: "${linkText}"`);
+    } else {
+      // Fallback: try to find any [difficulty] pattern
+      const allBrackets = linkText.match(/\[([^\]]+)\]/g);
+      if (allBrackets && allBrackets.length > 0) {
+        // Take the last bracket content (usually the difficulty)
+        difficulty = allBrackets[allBrackets.length - 1].slice(1, -1); // Remove [ and ]
+        console.log(`[DEBUG extractBeatmapInfoFromMessage] Extracted difficulty (fallback): "${difficulty}"`);
+      }
     }
     
     if (beatmapId && difficulty) {
@@ -688,13 +701,42 @@ client.on(Events.InteractionCreate, async (interaction) => {
       let beatmapStatus = null;
       let beatmapStatusName = 'Unknown';
       
-      try {
-        const beatmap = await getBeatmap(beatmapId);
-        beatmapStatus = beatmap.status;
+      // Debug: Check what's in the score object
+      console.log(`[DEBUG /trs] Score object structure:`, {
+        hasBeatmap: !!userScore.beatmap,
+        beatmapKeys: userScore.beatmap ? Object.keys(userScore.beatmap) : null,
+        beatmapStatus: userScore.beatmap?.status,
+        beatmapsetStatus: userScore.beatmap?.beatmapset?.status,
+        beatmapsetId: userScore.beatmap?.beatmapset_id,
+      });
+      
+      // Try to get status from score object first (might be in beatmap or beatmapset)
+      if (userScore.beatmap?.status !== undefined) {
+        beatmapStatus = userScore.beatmap.status;
         beatmapStatusName = getBeatmapStatusName(beatmapStatus);
-      } catch (error) {
-        console.error('Error fetching beatmap status:', error);
-        // Continue with unknown status
+        console.log(`[DEBUG /trs] Got status from score.beatmap.status: ${beatmapStatus} (${beatmapStatusName})`);
+      } else if (userScore.beatmap?.beatmapset?.status !== undefined) {
+        beatmapStatus = userScore.beatmap.beatmapset.status;
+        beatmapStatusName = getBeatmapStatusName(beatmapStatus);
+        console.log(`[DEBUG /trs] Got status from score.beatmap.beatmapset.status: ${beatmapStatus} (${beatmapStatusName})`);
+      } else {
+        // Fallback: fetch beatmap to get status
+        try {
+          const beatmap = await getBeatmap(beatmapId);
+          console.log(`[DEBUG /trs] Beatmap API response type:`, typeof beatmap);
+          console.log(`[DEBUG /trs] Beatmap API response keys:`, beatmap ? Object.keys(beatmap) : 'null');
+          console.log(`[DEBUG /trs] Beatmap status field:`, beatmap?.status);
+          console.log(`[DEBUG /trs] Beatmap beatmapset status:`, beatmap?.beatmapset?.status);
+          
+          // Status might be in beatmap.status or beatmap.beatmapset.status
+          beatmapStatus = beatmap?.status ?? beatmap?.beatmapset?.status;
+          beatmapStatusName = getBeatmapStatusName(beatmapStatus);
+          console.log(`[DEBUG /trs] Parsed status: ${beatmapStatus} -> ${beatmapStatusName}`);
+        } catch (error) {
+          console.error('[DEBUG /trs] Error fetching beatmap status:', error);
+          console.error('[DEBUG /trs] Error details:', error.message);
+          // Continue with unknown status
+        }
       }
 
       // Format score display (same as challenge posting)
@@ -809,16 +851,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
           })));
         }
         
-        // Filter scores by difficulty (beatmap.version)
-        const matchingScores = allBeatmapScores.filter(score => {
-          const scoreDifficulty = score.beatmap?.version;
-          const matches = scoreDifficulty === difficulty;
-          if (!matches && allBeatmapScores.length > 0) {
-            console.log(`[DEBUG /tc] Score difficulty mismatch: expected "${difficulty}", got "${scoreDifficulty}"`);
-          }
-          return matches;
-        });
+        // The API response from /beatmaps/{beatmap}/scores/users/{user}/all doesn't include beatmap.version
+        // We need to fetch the beatmap to get the difficulty name, or all scores are for the same beatmap
+        // Since all scores are for the same beatmap ID, we can fetch the beatmap once to get the difficulty
+        let beatmapDifficulty = null;
+        try {
+          const beatmap = await getBeatmap(beatmapId);
+          beatmapDifficulty = beatmap.version;
+          console.log(`[DEBUG /tc] Beatmap difficulty from API: "${beatmapDifficulty}"`);
+        } catch (error) {
+          console.error(`[DEBUG /tc] Error fetching beatmap for difficulty:`, error);
+        }
         
+        // Since all scores are for the same beatmap, if the difficulty matches, all scores match
+        // Compare extracted difficulty with beatmap difficulty
+        const matchingScores = (beatmapDifficulty && beatmapDifficulty === difficulty) ? allBeatmapScores : [];
+        
+        console.log(`[DEBUG /tc] Difficulty comparison: extracted="${difficulty}", beatmap="${beatmapDifficulty}", match=${beatmapDifficulty === difficulty}`);
         console.log(`[DEBUG /tc] Matching scores after filtering: ${matchingScores.length}`);
 
         if (matchingScores.length > 0) {
