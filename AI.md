@@ -290,3 +290,5 @@ When working on this codebase:
 - The bot requires specific Discord intents: Guilds, GuildMessages, MessageContent, GuildMessageReactions
 - Partials are enabled for Message, Reaction, and Channel to handle cached data
 
+
+

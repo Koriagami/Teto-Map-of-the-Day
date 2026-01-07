@@ -288,6 +288,43 @@ export const activeChallenges = {
   },
 };
 
+// Local Score operations
+export const localScores = {
+  async create(guildId, discordUserId, osuUserId, score) {
+    return prisma.localScore.create({
+      data: {
+        guildId,
+        discordUserId,
+        osuUserId,
+        score,
+      },
+    });
+  },
+
+  async getByUser(guildId, discordUserId) {
+    return prisma.localScore.findMany({
+      where: {
+        guildId,
+        discordUserId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  },
+
+  async getByOsuUser(osuUserId) {
+    return prisma.localScore.findMany({
+      where: {
+        osuUserId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  },
+};
+
 // Cleanup function for graceful shutdown
 export async function disconnect() {
   await prisma.$disconnect();
@@ -295,4 +332,6 @@ export async function disconnect() {
 
 // Export prisma client for advanced queries if needed
 export { prisma };
+
+
 

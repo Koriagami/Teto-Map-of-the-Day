@@ -10,7 +10,7 @@ import {
 import cron from 'node-cron';
 import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUser, getBeatmap } from './osu-api.js';
-import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, disconnect } from './db.js';
+import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect } from './db.js';
 
 const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
 
@@ -221,6 +221,28 @@ function formatPlayerStats(score) {
   stats += `• Hits: **${count300}**/${count100}/${count50}/**${countMiss}**\n\n`;
   
   return stats;
+}
+
+// Helper: get beatmap status name from status number
+function getBeatmapStatusName(status) {
+  const statusMap = {
+    '-2': 'Graveyard',
+    '-1': 'WIP',
+    '0': 'Pending',
+    '1': 'Ranked',
+    '2': 'Approved',
+    '3': 'Qualified',
+    '4': 'Loved',
+  };
+  return statusMap[String(status)] || 'Unknown';
+}
+
+// Helper: check if beatmap status saves scores to osu! servers
+// Returns true for: Ranked (1), Approved (2), Qualified (3), Loved (4)
+// Returns false for: Graveyard (-2), WIP (-1), Pending (0)
+function isScoreSavedOnOsu(status) {
+  const statusNum = typeof status === 'string' ? parseInt(status, 10) : status;
+  return statusNum >= 1 && statusNum <= 4;
 }
 
 // Helper: extract OSU username/user ID from profile link
@@ -528,6 +550,106 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     } catch (error) {
       console.error('Error in /rsc command:', error);
+      return interaction.editReply({ 
+        content: `Error: ${error.message}`,
+        ephemeral: true 
+      });
+    }
+  }
+
+  // Handle /trs command
+  if (interaction.commandName === 'trs') {
+    await interaction.deferReply({ ephemeral: false });
+
+    try {
+      const guildId = interaction.guildId;
+      if (!guildId) {
+        return interaction.editReply({ 
+          content: 'This command can only be used in a server.',
+          ephemeral: true 
+        });
+      }
+      const userId = interaction.user.id;
+
+      // Check if user has association
+      const association = await associations.get(guildId, userId);
+      if (!association || !association.osuUserId) {
+        return interaction.editReply({ 
+          content: 'You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.',
+          ephemeral: true 
+        });
+      }
+
+      const osuUserId = association.osuUserId;
+
+      // Get most recent score
+      const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
+      const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
+      
+      if (!recentScores || recentScores.length === 0) {
+        return interaction.editReply({ 
+          content: 'You have no recent scores. Play a map first!',
+          ephemeral: true 
+        });
+      }
+
+      const userScore = recentScores[0];
+      
+      // Validate score object
+      if (!isValidScore(userScore)) {
+        return interaction.editReply({ 
+          content: 'Invalid score data received from OSU API. Please play a map first and try again.',
+          ephemeral: true 
+        });
+      }
+
+      // Get beatmap info to check status
+      const beatmapId = userScore.beatmap.id.toString();
+      let beatmapStatus = null;
+      let beatmapStatusName = 'Unknown';
+      
+      try {
+        const beatmap = await getBeatmap(beatmapId);
+        beatmapStatus = beatmap.status;
+        beatmapStatusName = getBeatmapStatusName(beatmapStatus);
+      } catch (error) {
+        console.error('Error fetching beatmap status:', error);
+        // Continue with unknown status
+      }
+
+      // Format score display (same as challenge posting)
+      const beatmapLink = formatBeatmapLink(userScore);
+      const playerStats = formatPlayerStats(userScore);
+      const mapTitle = await getMapTitle(userScore);
+      const difficulty = userScore.beatmap.version;
+      const difficultyLabel = `${mapTitle} [${difficulty}]`;
+      const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
+
+      // Check if score is saved on osu! servers
+      const isSaved = isScoreSavedOnOsu(beatmapStatus);
+      let statusMessage = '';
+
+      if (isSaved) {
+        statusMessage = `\n\nThis map is **${beatmapStatusName}**. The score is saved on the OSU! servers.`;
+      } else {
+        // Save to local database
+        try {
+          await localScores.create(guildId, userId, osuUserId, userScore);
+          statusMessage = `\n\nThe map is **${beatmapStatusName}**. Teto will remember this score.`;
+        } catch (error) {
+          console.error('Error saving local score:', error);
+          statusMessage = `\n\nThe map is **${beatmapStatusName}**. Failed to save score locally.`;
+        }
+      }
+
+      const message = `Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
+
+      return interaction.editReply({ 
+        content: message
+      });
+
+    } catch (error) {
+      console.error('Error in /trs command:', error);
       return interaction.editReply({ 
         content: `Error: ${error.message}`,
         ephemeral: true 

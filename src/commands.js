@@ -74,4 +74,8 @@ const rscCommand = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-export const commands = [mapSubmit.toJSON(), rscCommand.toJSON()];
+const trsCommand = new SlashCommandBuilder()
+  .setName('trs')
+  .setDescription('Track your most recent osu! score');
+
+export const commands = [mapSubmit.toJSON(), rscCommand.toJSON(), trsCommand.toJSON()];
