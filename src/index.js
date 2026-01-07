@@ -225,6 +225,26 @@ function formatPlayerStats(score) {
 
 // Helper: get beatmap status name from status number
 function getBeatmapStatusName(status) {
+  // Handle both numeric and string status values
+  const statusStr = String(status).toLowerCase();
+  
+  // Map string status names to display names
+  const stringStatusMap = {
+    'graveyard': 'Graveyard',
+    'wip': 'WIP',
+    'pending': 'Pending',
+    'ranked': 'Ranked',
+    'approved': 'Approved',
+    'qualified': 'Qualified',
+    'loved': 'Loved',
+  };
+  
+  // Check string status first
+  if (stringStatusMap[statusStr]) {
+    return stringStatusMap[statusStr];
+  }
+  
+  // Fallback to numeric status mapping
   const statusMap = {
     '-2': 'Graveyard',
     '-1': 'WIP',
@@ -241,6 +261,16 @@ function getBeatmapStatusName(status) {
 // Returns true for: Ranked (1), Approved (2), Qualified (3), Loved (4)
 // Returns false for: Graveyard (-2), WIP (-1), Pending (0)
 function isScoreSavedOnOsu(status) {
+  // Handle string status names
+  const statusStr = String(status).toLowerCase();
+  if (['ranked', 'approved', 'qualified', 'loved'].includes(statusStr)) {
+    return true;
+  }
+  if (['graveyard', 'wip', 'pending'].includes(statusStr)) {
+    return false;
+  }
+  
+  // Fallback to numeric check
   const statusNum = typeof status === 'string' ? parseInt(status, 10) : status;
   return statusNum >= 1 && statusNum <= 4;
 }
@@ -362,19 +392,42 @@ function extractBeatmapInfoFromMessage(messageContent) {
           }
         }
         
-        // Fallback: simple patterns if bracket parsing didn't work
+        // Fallback: work backwards from the end to find the last bracket pair
         if (!difficulty) {
-          const difficultyPatterns = [
-            /\*\*[^\*]+\s+\[([^\]]+)\]\*\*/, // **Map Title [Difficulty]**
-            /\[([^\]]+)\](?!\()/, // [Difficulty] not followed by (
-          ];
+          // Find the last ] that's not part of a markdown link
+          const lastBracketEnd = messageContent.lastIndexOf(']');
+          if (lastBracketEnd !== -1) {
+            // Check if it's not part of a markdown link (not followed by ()
+            if (messageContent[lastBracketEnd + 1] !== '(') {
+              // Find the matching [ by working backwards
+              let bracketCount = 1;
+              let pos = lastBracketEnd - 1;
+              while (pos >= 0 && bracketCount > 0) {
+                if (messageContent[pos] === ']') bracketCount++;
+                else if (messageContent[pos] === '[') bracketCount--;
+                pos--;
+              }
+              if (bracketCount === 0) {
+                // Found matching bracket pair
+                difficulty = messageContent.substring(pos + 2, lastBracketEnd);
+                console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty="${difficulty}" via backward search (fallback)`);
+              }
+            }
+          }
           
-          for (const pattern of difficultyPatterns) {
-            const match = messageContent.match(pattern);
-            if (match) {
-              difficulty = match[1];
-              console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty="${difficulty}" via pattern (fallback)`);
-              break;
+          // Final fallback: simple regex patterns (but these are less reliable)
+          if (!difficulty) {
+            const difficultyPatterns = [
+              /\*\*[^\*]+\s+\[([^\]]+)\]\*\*/, // **Map Title [Difficulty]**
+            ];
+            
+            for (const pattern of difficultyPatterns) {
+              const match = messageContent.match(pattern);
+              if (match) {
+                difficulty = match[1];
+                console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty="${difficulty}" via pattern (final fallback)`);
+                break;
+              }
             }
           }
         }
