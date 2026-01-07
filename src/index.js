@@ -223,6 +223,29 @@ function formatPlayerStats(score) {
   return stats;
 }
 
+// Helper: format player stats in compact one-line format
+function formatPlayerStatsCompact(score) {
+  // Safely extract score value - handle both number and object cases
+  let scoreValue = 0;
+  if (typeof score.score === 'number') {
+    scoreValue = score.score;
+  } else if (typeof score.score === 'object' && score.score !== null) {
+    // Sometimes score might be nested in an object
+    scoreValue = score.score.total || score.score.value || 0;
+  }
+  
+  const rank = score.rank || 'N/A';
+  const pp = typeof score.pp === 'number' ? score.pp : 0;
+  const accuracy = typeof score.accuracy === 'number' ? (score.accuracy * 100) : 0;
+  const maxCombo = typeof score.max_combo === 'number' ? score.max_combo : 0;
+  const count300 = score.statistics?.count_300 || 0;
+  const count100 = score.statistics?.count_100 || 0;
+  const count50 = score.statistics?.count_50 || 0;
+  const countMiss = score.statistics?.count_miss || 0;
+  
+  return `${rank} | ${pp.toFixed(2)}pp | ${accuracy.toFixed(2)}% | ${maxCombo.toLocaleString()}x | ${scoreValue.toLocaleString()} | ${count300}/${count100}/${count50}/${countMiss}`;
+}
+
 // Helper: get beatmap status name from status number
 function getBeatmapStatusName(status) {
   // Handle both numeric and string status values
@@ -983,13 +1006,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
           
           for (let i = 0; i < sortedScores.length; i++) {
             const score = sortedScores[i];
-            const playerStats = formatPlayerStats(score);
             
-            message += `**Score #${i + 1}**\n${playerStats}`;
-            
-            // Add separator between scores (except for the last one)
-            if (i < sortedScores.length - 1) {
-              message += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+            if (i === 0) {
+              // First score: full format
+              const playerStats = formatPlayerStats(score);
+              message += `**Score #${i + 1}**\n${playerStats}`;
+            } else {
+              // Subsequent scores: compact one-line format
+              const compactStats = formatPlayerStatsCompact(score);
+              message += `**Score #${i + 1}**: ${compactStats}\n`;
             }
           }
 
@@ -1024,13 +1049,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
         
         for (let i = 0; i < sortedRecords.length; i++) {
           const record = sortedRecords[i];
-          const playerStats = formatPlayerStats(record.score);
           
-          message += `**Score #${i + 1}**\n${playerStats}`;
-          
-          // Add separator between scores (except for the last one)
-          if (i < sortedRecords.length - 1) {
-            message += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+          if (i === 0) {
+            // First score: full format
+            const playerStats = formatPlayerStats(record.score);
+            message += `**Score #${i + 1}**\n${playerStats}`;
+          } else {
+            // Subsequent scores: compact one-line format
+            const compactStats = formatPlayerStatsCompact(record.score);
+            message += `**Score #${i + 1}**: ${compactStats}\n`;
           }
         }
 
