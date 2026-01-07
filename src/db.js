@@ -291,6 +291,12 @@ export const activeChallenges = {
 // Local Score operations
 export const localScores = {
   async create(guildId, discordUserId, osuUserId, score) {
+    // Check if this exact score already exists
+    const existing = await this.exists(guildId, discordUserId, score);
+    if (existing) {
+      return existing; // Return existing record instead of creating duplicate
+    }
+
     return prisma.localScore.create({
       data: {
         guildId,
@@ -299,6 +305,34 @@ export const localScores = {
         score,
       },
     });
+  },
+
+  async exists(guildId, discordUserId, score) {
+    // Get all scores for this user in this guild
+    const allScores = await prisma.localScore.findMany({
+      where: {
+        guildId,
+        discordUserId,
+      },
+    });
+
+    // Check if a score with the same beatmap ID, difficulty, and score value exists
+    const beatmapId = score.beatmap?.id?.toString();
+    const difficulty = score.beatmap?.version;
+    const scoreValue = score.score;
+
+    return allScores.find(record => {
+      const existingScore = record.score;
+      if (!existingScore || typeof existingScore !== 'object') return false;
+      
+      const existingBeatmapId = existingScore.beatmap?.id?.toString();
+      const existingDifficulty = existingScore.beatmap?.version;
+      const existingScoreValue = existingScore.score;
+      
+      return existingBeatmapId === beatmapId && 
+             existingDifficulty === difficulty && 
+             existingScoreValue === scoreValue;
+    }) || null;
   },
 
   async getByUser(guildId, discordUserId) {

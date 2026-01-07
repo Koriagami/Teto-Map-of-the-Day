@@ -704,10 +704,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (isSaved) {
         statusMessage = `\n\nThis map is **${beatmapStatusName}**. The score is saved on the OSU! servers.`;
       } else {
-        // Save to local database
+        // Save to local database (only if not duplicate)
         try {
-          await localScores.create(guildId, userId, osuUserId, userScore);
-          statusMessage = `\n\nThe map is **${beatmapStatusName}**. Teto will remember this score.`;
+          const existing = await localScores.exists(guildId, userId, userScore);
+          if (existing) {
+            statusMessage = `\n\nThe map is **${beatmapStatusName}**. This score is already saved.`;
+          } else {
+            await localScores.create(guildId, userId, osuUserId, userScore);
+            statusMessage = `\n\nThe map is **${beatmapStatusName}**. Teto will remember this score.`;
+          }
         } catch (error) {
           console.error('Error saving local score:', error);
           statusMessage = `\n\nThe map is **${beatmapStatusName}**. Failed to save score locally.`;
