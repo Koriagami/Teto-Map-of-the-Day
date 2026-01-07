@@ -245,6 +245,78 @@ function isScoreSavedOnOsu(status) {
   return statusNum >= 1 && statusNum <= 4;
 }
 
+// Helper: extract beatmap ID and difficulty from a message
+// Looks for osu.ppy.sh links and difficulty names in brackets
+// Handles formats like: [Map Title [Difficulty]](link) or **Map Title [Difficulty]**
+// Returns: { beatmapId: string, difficulty: string } or null
+function extractBeatmapInfoFromMessage(messageContent) {
+  if (!messageContent) return null;
+
+  // Find osu.ppy.sh links in the message (markdown links or plain URLs)
+  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/osu\.ppy\.sh\/[^\)]+)\)/;
+  const plainLinkRegex = /https?:\/\/osu\.ppy\.sh\/[^\s\)]+/g;
+  
+  let beatmapId = null;
+  let difficulty = null;
+
+  // Try markdown link format first: [Map Title [Difficulty]](link)
+  const markdownMatch = messageContent.match(markdownLinkRegex);
+  if (markdownMatch) {
+    const linkText = markdownMatch[1]; // "Map Title [Difficulty]"
+    const linkUrl = markdownMatch[2]; // "https://osu.ppy.sh/..."
+    
+    beatmapId = extractBeatmapId(linkUrl);
+    
+    // Extract difficulty from link text: "Map Title [Difficulty]"
+    const difficultyMatch = linkText.match(/\[([^\]]+)\]$/);
+    if (difficultyMatch) {
+      difficulty = difficultyMatch[1];
+    }
+    
+    if (beatmapId && difficulty) {
+      return { beatmapId, difficulty };
+    }
+  }
+
+  // Try plain link format: find link and extract difficulty from nearby text
+  const plainLinks = messageContent.match(plainLinkRegex);
+  if (plainLinks && plainLinks.length > 0) {
+    for (const link of plainLinks) {
+      beatmapId = extractBeatmapId(link);
+      if (beatmapId) {
+        // Look for difficulty in brackets near the link
+        // Pattern: **Map Title [Difficulty]** or Map Title [Difficulty]
+        const difficultyPatterns = [
+          /\*\*[^\*]+\s+\[([^\]]+)\]\*\*/, // **Map Title [Difficulty]**
+          /\[([^\]]+)\](?!\()/, // [Difficulty] not followed by (
+        ];
+        
+        for (const pattern of difficultyPatterns) {
+          const match = messageContent.match(pattern);
+          if (match) {
+            difficulty = match[1];
+            break;
+          }
+        }
+        
+        // Also try nested pattern: [Map Title [Difficulty]]
+        if (!difficulty) {
+          const nestedMatch = messageContent.match(/\[([^\[]+)\s+\[([^\]]+)\]\]/);
+          if (nestedMatch) {
+            difficulty = nestedMatch[2];
+          }
+        }
+        
+        if (difficulty) {
+          return { beatmapId, difficulty };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 // Helper: extract OSU username/user ID from profile link
 // Requires "osu.ppy.sh/users/" format
 function extractOsuProfile(profileLink) {
@@ -650,6 +722,107 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     } catch (error) {
       console.error('Error in /trs command:', error);
+      return interaction.editReply({ 
+        content: `Error: ${error.message}`,
+        ephemeral: true 
+      });
+    }
+  }
+
+  // Handle /tc command
+  if (interaction.commandName === 'tc') {
+    await interaction.deferReply({ ephemeral: false });
+
+    try {
+      const guildId = interaction.guildId;
+      if (!guildId) {
+        return interaction.editReply({ 
+          content: 'This command can only be used in a server.',
+          ephemeral: true 
+        });
+      }
+      const userId = interaction.user.id;
+      const channel = interaction.channel;
+
+      // Check if user has association
+      const association = await associations.get(guildId, userId);
+      if (!association || !association.osuUserId) {
+        return interaction.editReply({ 
+          content: 'You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.',
+          ephemeral: true 
+        });
+      }
+
+      const osuUserId = association.osuUserId;
+
+      // Fetch last 20 messages from the channel
+      const messages = await channel.messages.fetch({ limit: 20 });
+      
+      // Search for difficulty link in messages
+      let beatmapInfo = null;
+      for (const [messageId, message] of messages) {
+        const content = message.content;
+        beatmapInfo = extractBeatmapInfoFromMessage(content);
+        if (beatmapInfo) break;
+      }
+
+      if (!beatmapInfo) {
+        return interaction.editReply({ 
+          content: 'No difficulty link found in the last 20 messages of this channel.',
+          ephemeral: true 
+        });
+      }
+
+      const { beatmapId, difficulty } = beatmapInfo;
+
+      // Try to get user's score from osu! servers first
+      let userScore = null;
+      try {
+        userScore = await getUserBeatmapScore(beatmapId, osuUserId);
+        
+        // Check if difficulty matches
+        if (userScore && userScore.beatmap?.version === difficulty) {
+          // Found on osu! servers with matching difficulty
+          const beatmapLink = formatBeatmapLink(userScore);
+          const playerStats = formatPlayerStats(userScore);
+          const mapTitle = await getMapTitle(userScore);
+          const difficultyLabel = `${mapTitle} [${difficulty}]`;
+          const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
+
+          return interaction.editReply({ 
+            content: `Your score on ${difficultyLink}:\n\n${playerStats}`
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching score from osu! API:', error);
+        // Continue to check local scores
+      }
+
+      // If not found on osu! servers or difficulty doesn't match, check local scores
+      const localScoreRecords = await localScores.getByBeatmapAndDifficulty(guildId, userId, beatmapId, difficulty);
+      
+      if (localScoreRecords && localScoreRecords.length > 0) {
+        // Use the most recent local score
+        const localScore = localScoreRecords[0].score;
+        const beatmapLink = formatBeatmapLink(localScore);
+        const playerStats = formatPlayerStats(localScore);
+        const mapTitle = await getMapTitle(localScore);
+        const difficultyLabel = `${mapTitle} [${difficulty}]`;
+        const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
+
+        return interaction.editReply({ 
+          content: `Your score on ${difficultyLink} (from local storage):\n\n${playerStats}`
+        });
+      }
+
+      // No score found in either place
+      return interaction.editReply({ 
+        content: `No score found for difficulty **${difficulty}** on this beatmap. Play it first!`,
+        ephemeral: true 
+      });
+
+    } catch (error) {
+      console.error('Error in /tc command:', error);
       return interaction.editReply({ 
         content: `Error: ${error.message}`,
         ephemeral: true 

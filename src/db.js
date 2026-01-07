@@ -323,6 +323,29 @@ export const localScores = {
       },
     });
   },
+
+  async getByBeatmapAndDifficulty(guildId, discordUserId, beatmapId, difficulty) {
+    const allScores = await prisma.localScore.findMany({
+      where: {
+        guildId,
+        discordUserId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Filter by beatmap ID and difficulty (stored in JSON)
+    return allScores.filter(record => {
+      const score = record.score;
+      if (!score || typeof score !== 'object') return false;
+      
+      const scoreBeatmapId = score.beatmap?.id?.toString();
+      const scoreDifficulty = score.beatmap?.version;
+      
+      return scoreBeatmapId === beatmapId && scoreDifficulty === difficulty;
+    });
+  },
 };
 
 // Cleanup function for graceful shutdown
