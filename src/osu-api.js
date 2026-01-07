@@ -171,6 +171,50 @@ async function getUserRecentScores(userId, options = {}) {
 }
 
 /**
+ * Get all of a user's scores on a specific beatmap
+ * @param {string} beatmapId - The beatmap ID
+ * @param {string} userId - OSU user ID
+ * @param {object} options - Optional parameters (mode, ruleset, legacy_only, etc.)
+ * @returns {Promise<array>} Array of all user's scores for the beatmap
+ */
+async function getUserBeatmapScoresAll(beatmapId, userId, options = {}) {
+  const params = new URLSearchParams();
+  
+  if (options.mode) params.append('mode', options.mode);
+  if (options.ruleset) params.append('ruleset', options.ruleset);
+  if (options.legacy_only !== undefined) params.append('legacy_only', options.legacy_only ? '1' : '0');
+
+  const queryString = params.toString();
+  const userIdStr = String(userId);
+  const endpoint = `/beatmaps/${beatmapId}/scores/users/${userIdStr}/all${queryString ? `?${queryString}` : ''}`;
+
+  try {
+    const response = await apiRequest(endpoint);
+    
+    // The API returns an object with a 'scores' array
+    if (response && typeof response === 'object') {
+      if (Array.isArray(response)) {
+        return response;
+      }
+      if (response.scores && Array.isArray(response.scores)) {
+        return response.scores;
+      }
+      return [];
+    }
+    return [];
+  } catch (error) {
+    // If user has no scores for this beatmap, API returns 404
+    const errorMessage = error.message.toLowerCase();
+    if (errorMessage.includes('404') || 
+        errorMessage.includes('not found') || 
+        errorMessage.includes('no score')) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+/**
  * Get user's best score for a specific beatmap
  * @param {string} beatmapId - The beatmap ID
  * @param {string} userId - OSU user ID
@@ -256,7 +300,7 @@ async function getUser(user, options = {}) {
   }
 }
 
-export { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUser };
+export { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser };
 
 
 

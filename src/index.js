@@ -9,7 +9,7 @@ import {
 } from 'discord.js';
 import cron from 'node-cron';
 import { commands } from './commands.js';
-import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUser, getBeatmap } from './osu-api.js';
+import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect } from './db.js';
 
 const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
@@ -776,40 +776,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const { beatmapId, difficulty } = beatmapInfo;
 
       // Step 1: Check for API scores first
-      // Fetch recent scores with pagination (up to 500 scores) and filter by beatmap ID and difficulty
+      // Use /beatmaps/{beatmap}/scores/users/{user}/all endpoint to get all user's scores for this beatmap
       try {
-        const allRecentScores = [];
-        const limit = 100; // Maximum per request
-        const maxScores = 500; // Total scores to fetch
-        let offset = 0;
+        // Get all user's scores for this beatmap
+        const allBeatmapScores = await getUserBeatmapScoresAll(beatmapId, osuUserId);
         
-        // Fetch scores in batches of 100 until we have 500 or reach the end
-        while (allRecentScores.length < maxScores) {
-          const batch = await getUserRecentScores(osuUserId, { 
-            limit, 
-            offset, 
-            include_fails: false 
-          });
-          
-          if (!batch || !Array.isArray(batch) || batch.length === 0) {
-            break; // No more scores available
-          }
-          
-          allRecentScores.push(...batch);
-          
-          // If we got fewer than 100, we've reached the end
-          if (batch.length < limit) {
-            break;
-          }
-          
-          offset += limit;
-        }
-        
-        // Filter scores by beatmap ID and difficulty
-        const matchingScores = allRecentScores.filter(score => {
-          const scoreBeatmapId = score.beatmap?.id?.toString();
+        // Filter scores by difficulty (beatmap.version)
+        const matchingScores = allBeatmapScores.filter(score => {
           const scoreDifficulty = score.beatmap?.version;
-          return scoreBeatmapId === beatmapId && scoreDifficulty === difficulty;
+          return scoreDifficulty === difficulty;
         });
 
         if (matchingScores.length > 0) {
