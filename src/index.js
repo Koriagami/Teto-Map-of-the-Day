@@ -776,25 +776,53 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const { beatmapId, difficulty } = beatmapInfo;
 
       // Step 1: Check for API scores first
+      // Fetch recent scores and filter by beatmap ID and difficulty
       try {
-        const apiScore = await getUserBeatmapScore(beatmapId, osuUserId);
+        // Fetch up to 100 recent scores (maximum allowed by API)
+        const recentScoresData = await getUserRecentScores(osuUserId, { limit: 100, include_fails: false });
+        const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
         
-        // Check if difficulty matches
-        if (apiScore && apiScore.beatmap?.version === difficulty) {
-          // Found on osu! servers with matching difficulty
-          // Note: API typically returns one score (best), but we'll format it for consistency
-          const beatmapLink = formatBeatmapLink(apiScore);
-          const playerStats = formatPlayerStats(apiScore);
-          const mapTitle = await getMapTitle(apiScore);
+        // Filter scores by beatmap ID and difficulty
+        const matchingScores = recentScores.filter(score => {
+          const scoreBeatmapId = score.beatmap?.id?.toString();
+          const scoreDifficulty = score.beatmap?.version;
+          return scoreBeatmapId === beatmapId && scoreDifficulty === difficulty;
+        });
+
+        if (matchingScores.length > 0) {
+          // Sort by score value (highest first) and limit to 8
+          const sortedScores = matchingScores
+            .sort((a, b) => (b.score || 0) - (a.score || 0))
+            .slice(0, 8);
+
+          // Get map info from first score
+          const firstScore = sortedScores[0];
+          const beatmapLink = formatBeatmapLink(firstScore);
+          const mapTitle = await getMapTitle(firstScore);
           const difficultyLabel = `${mapTitle} [${difficulty}]`;
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
+          // Build message with all scores
+          let message = `Your scores on ${difficultyLink}:\n\n`;
+          
+          for (let i = 0; i < sortedScores.length; i++) {
+            const score = sortedScores[i];
+            const playerStats = formatPlayerStats(score);
+            
+            message += `**Score #${i + 1}**\n${playerStats}`;
+            
+            // Add separator between scores (except for the last one)
+            if (i < sortedScores.length - 1) {
+              message += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+            }
+          }
+
           return interaction.editReply({ 
-            content: `Your score on ${difficultyLink}:\n\n${playerStats}`
+            content: message
           });
         }
       } catch (error) {
-        console.error('Error fetching score from osu! API:', error);
+        console.error('Error fetching scores from osu! API:', error);
         // Continue to check local scores
       }
 
