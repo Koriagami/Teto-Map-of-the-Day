@@ -191,16 +191,28 @@ async function getUserBeatmapScoresAll(beatmapId, userId, options = {}) {
   try {
     const response = await apiRequest(endpoint);
     
+    // Debug logging
+    console.log(`[DEBUG getUserBeatmapScoresAll] Endpoint: ${endpoint}`);
+    console.log(`[DEBUG getUserBeatmapScoresAll] Response type:`, typeof response);
+    console.log(`[DEBUG getUserBeatmapScoresAll] Is array:`, Array.isArray(response));
+    if (response && typeof response === 'object' && !Array.isArray(response)) {
+      console.log(`[DEBUG getUserBeatmapScoresAll] Response keys:`, Object.keys(response));
+    }
+    
     // The API returns an object with a 'scores' array
     if (response && typeof response === 'object') {
       if (Array.isArray(response)) {
+        console.log(`[DEBUG getUserBeatmapScoresAll] Returning array directly, length: ${response.length}`);
         return response;
       }
       if (response.scores && Array.isArray(response.scores)) {
+        console.log(`[DEBUG getUserBeatmapScoresAll] Returning scores array, length: ${response.scores.length}`);
         return response.scores;
       }
+      console.log(`[DEBUG getUserBeatmapScoresAll] No scores found in response, returning empty array`);
       return [];
     }
+    console.log(`[DEBUG getUserBeatmapScoresAll] Invalid response, returning empty array`);
     return [];
   } catch (error) {
     // If user has no scores for this beatmap, API returns 404

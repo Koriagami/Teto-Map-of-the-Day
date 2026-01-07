@@ -274,6 +274,7 @@ function extractBeatmapInfoFromMessage(messageContent) {
     }
     
     if (beatmapId && difficulty) {
+      console.log(`[DEBUG extractBeatmapInfoFromMessage] Found via markdown link: beatmapId=${beatmapId}, difficulty=${difficulty}`);
       return { beatmapId, difficulty };
     }
   }
@@ -284,6 +285,7 @@ function extractBeatmapInfoFromMessage(messageContent) {
     for (const link of plainLinks) {
       beatmapId = extractBeatmapId(link);
       if (beatmapId) {
+        console.log(`[DEBUG extractBeatmapInfoFromMessage] Found beatmapId=${beatmapId} from link: ${link}`);
         // Look for difficulty in brackets near the link
         // Pattern: **Map Title [Difficulty]** or Map Title [Difficulty]
         const difficultyPatterns = [
@@ -295,6 +297,7 @@ function extractBeatmapInfoFromMessage(messageContent) {
           const match = messageContent.match(pattern);
           if (match) {
             difficulty = match[1];
+            console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty=${difficulty} via pattern`);
             break;
           }
         }
@@ -304,16 +307,21 @@ function extractBeatmapInfoFromMessage(messageContent) {
           const nestedMatch = messageContent.match(/\[([^\[]+)\s+\[([^\]]+)\]\]/);
           if (nestedMatch) {
             difficulty = nestedMatch[2];
+            console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty=${difficulty} via nested pattern`);
           }
         }
         
         if (difficulty) {
+          console.log(`[DEBUG extractBeatmapInfoFromMessage] Returning: beatmapId=${beatmapId}, difficulty=${difficulty}`);
           return { beatmapId, difficulty };
+        } else {
+          console.log(`[DEBUG extractBeatmapInfoFromMessage] Found beatmapId but no difficulty`);
         }
       }
     }
   }
 
+  console.log(`[DEBUG extractBeatmapInfoFromMessage] No beatmap info found in message`);
   return null;
 }
 
@@ -769,7 +777,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       for (const [messageId, message] of messages) {
         const content = message.content;
         beatmapInfo = extractBeatmapInfoFromMessage(content);
-        if (beatmapInfo) break;
+        if (beatmapInfo) {
+          console.log(`[DEBUG /tc] Found beatmap info:`, beatmapInfo);
+          break;
+        }
       }
 
       if (!beatmapInfo) {
@@ -787,11 +798,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // Get all user's scores for this beatmap
         const allBeatmapScores = await getUserBeatmapScoresAll(beatmapId, osuUserId);
         
+        // Debug logging
+        console.log(`[DEBUG /tc] Beatmap ID: ${beatmapId}, Difficulty: ${difficulty}, User ID: ${osuUserId}`);
+        console.log(`[DEBUG /tc] Total scores returned from API: ${allBeatmapScores.length}`);
+        if (allBeatmapScores.length > 0) {
+          console.log(`[DEBUG /tc] Sample score difficulties:`, allBeatmapScores.slice(0, 5).map(s => ({
+            difficulty: s.beatmap?.version,
+            score: s.score,
+            created_at: s.created_at
+          })));
+        }
+        
         // Filter scores by difficulty (beatmap.version)
         const matchingScores = allBeatmapScores.filter(score => {
           const scoreDifficulty = score.beatmap?.version;
-          return scoreDifficulty === difficulty;
+          const matches = scoreDifficulty === difficulty;
+          if (!matches && allBeatmapScores.length > 0) {
+            console.log(`[DEBUG /tc] Score difficulty mismatch: expected "${difficulty}", got "${scoreDifficulty}"`);
+          }
+          return matches;
         });
+        
+        console.log(`[DEBUG /tc] Matching scores after filtering: ${matchingScores.length}`);
 
         if (matchingScores.length > 0) {
           // Sort by score value (highest first) and limit to 8
