@@ -722,7 +722,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const message = `Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
 
       return interaction.editReply({ 
-        content: message
+        content: message,
+        flags: MessageFlags.SuppressEmbeds
       });
 
     } catch (error) {
@@ -821,7 +822,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
 
           return interaction.editReply({ 
-            content: message
+            content: message,
+            flags: MessageFlags.SuppressEmbeds
           });
         }
       } catch (error) {
@@ -861,7 +863,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         return interaction.editReply({ 
-          content: message
+          content: message,
+          flags: MessageFlags.SuppressEmbeds
         });
       }
 
