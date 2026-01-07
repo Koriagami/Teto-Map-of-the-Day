@@ -776,14 +776,37 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const { beatmapId, difficulty } = beatmapInfo;
 
       // Step 1: Check for API scores first
-      // Fetch recent scores and filter by beatmap ID and difficulty
+      // Fetch recent scores with pagination (up to 500 scores) and filter by beatmap ID and difficulty
       try {
-        // Fetch up to 100 recent scores (maximum allowed by API)
-        const recentScoresData = await getUserRecentScores(osuUserId, { limit: 100, include_fails: false });
-        const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
+        const allRecentScores = [];
+        const limit = 100; // Maximum per request
+        const maxScores = 500; // Total scores to fetch
+        let offset = 0;
+        
+        // Fetch scores in batches of 100 until we have 500 or reach the end
+        while (allRecentScores.length < maxScores) {
+          const batch = await getUserRecentScores(osuUserId, { 
+            limit, 
+            offset, 
+            include_fails: false 
+          });
+          
+          if (!batch || !Array.isArray(batch) || batch.length === 0) {
+            break; // No more scores available
+          }
+          
+          allRecentScores.push(...batch);
+          
+          // If we got fewer than 100, we've reached the end
+          if (batch.length < limit) {
+            break;
+          }
+          
+          offset += limit;
+        }
         
         // Filter scores by beatmap ID and difficulty
-        const matchingScores = recentScores.filter(score => {
+        const matchingScores = allRecentScores.filter(score => {
           const scoreBeatmapId = score.beatmap?.id?.toString();
           const scoreDifficulty = score.beatmap?.version;
           return scoreBeatmapId === beatmapId && scoreDifficulty === difficulty;

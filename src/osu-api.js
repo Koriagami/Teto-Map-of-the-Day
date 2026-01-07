@@ -154,13 +154,14 @@ async function getBeatmapScores(beatmapId, options = {}) {
 /**
  * Get user's recent scores
  * @param {string} userId - OSU user ID
- * @param {object} options - Optional parameters (mode, limit, etc.)
+ * @param {object} options - Optional parameters (mode, limit, offset, etc.)
  */
 async function getUserRecentScores(userId, options = {}) {
   const params = new URLSearchParams();
   
   if (options.mode) params.append('mode', options.mode);
   if (options.limit) params.append('limit', (options.limit || 1).toString());
+  if (options.offset !== undefined) params.append('offset', options.offset.toString());
   if (options.include_fails !== undefined) params.append('include_fails', options.include_fails ? '1' : '0');
 
   const queryString = params.toString();
