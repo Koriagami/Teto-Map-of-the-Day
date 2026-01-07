@@ -268,21 +268,39 @@ function extractBeatmapInfoFromMessage(messageContent) {
     beatmapId = extractBeatmapId(linkUrl);
     
     // Extract difficulty from link text: "Map Title [Difficulty]"
-    // Match the last [bracketed] content - need to handle nested brackets
-    // Use a more robust approach: find the last [ that's not part of a markdown link
-    // Pattern: find [text] at the end, but handle cases where difficulty might contain brackets
-    // Try to match the last bracket pair that's not followed by (
-    const difficultyMatch = linkText.match(/\[([^\]]+)\]$/);
-    if (difficultyMatch) {
-      difficulty = difficultyMatch[1];
-      console.log(`[DEBUG extractBeatmapInfoFromMessage] Extracted difficulty: "${difficulty}" from linkText: "${linkText}"`);
-    } else {
-      // Fallback: try to find any [difficulty] pattern
-      const allBrackets = linkText.match(/\[([^\]]+)\]/g);
-      if (allBrackets && allBrackets.length > 0) {
-        // Take the last bracket content (usually the difficulty)
-        difficulty = allBrackets[allBrackets.length - 1].slice(1, -1); // Remove [ and ]
-        console.log(`[DEBUG extractBeatmapInfoFromMessage] Extracted difficulty (fallback): "${difficulty}"`);
+    // The format is: "Map Title [Difficulty]" where Difficulty might contain brackets
+    // We need to find the last [bracketed] content, handling nested brackets
+    // Strategy: find the last [ that's followed by ] before the end of the string
+    // But we need to handle cases where difficulty name itself contains brackets
+    
+    // Try to match from the end: find the last complete bracket pair
+    // Reverse the string, find first ], then find matching [
+    const reversed = linkText.split('').reverse().join('');
+    const lastBracketEnd = reversed.indexOf(']');
+    if (lastBracketEnd !== -1) {
+      // Find the matching [ by counting brackets
+      let bracketCount = 1;
+      let pos = lastBracketEnd + 1;
+      while (pos < reversed.length && bracketCount > 0) {
+        if (reversed[pos] === ']') bracketCount++;
+        else if (reversed[pos] === '[') bracketCount--;
+        pos++;
+      }
+      if (bracketCount === 0) {
+        // Found matching bracket pair
+        const startPos = reversed.length - pos;
+        const endPos = reversed.length - lastBracketEnd - 1;
+        difficulty = linkText.substring(startPos + 1, endPos);
+        console.log(`[DEBUG extractBeatmapInfoFromMessage] Extracted difficulty (nested): "${difficulty}" from linkText: "${linkText}"`);
+      }
+    }
+    
+    // Fallback: simple regex if nested approach didn't work
+    if (!difficulty) {
+      const difficultyMatch = linkText.match(/\[([^\]]+)\]$/);
+      if (difficultyMatch) {
+        difficulty = difficultyMatch[1];
+        console.log(`[DEBUG extractBeatmapInfoFromMessage] Extracted difficulty (simple): "${difficulty}" from linkText: "${linkText}"`);
       }
     }
     
@@ -301,26 +319,63 @@ function extractBeatmapInfoFromMessage(messageContent) {
         console.log(`[DEBUG extractBeatmapInfoFromMessage] Found beatmapId=${beatmapId} from link: ${link}`);
         // Look for difficulty in brackets near the link
         // Pattern: **Map Title [Difficulty]** or Map Title [Difficulty]
-        const difficultyPatterns = [
-          /\*\*[^\*]+\s+\[([^\]]+)\]\*\*/, // **Map Title [Difficulty]**
-          /\[([^\]]+)\](?!\()/, // [Difficulty] not followed by (
-        ];
+        // Since difficulty names can contain brackets, we need a more robust approach
+        // Strategy: find the last [bracketed] content that's not part of a markdown link
         
-        for (const pattern of difficultyPatterns) {
-          const match = messageContent.match(pattern);
-          if (match) {
-            difficulty = match[1];
-            console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty=${difficulty} via pattern`);
-            break;
+        // First, try to find markdown links and exclude them
+        const markdownLinks = messageContent.match(/\[([^\]]+)\]\([^\)]+\)/g) || [];
+        const linkTexts = markdownLinks.map(link => {
+          const match = link.match(/\[([^\]]+)\]/);
+          return match ? match[1] : '';
+        });
+        
+        // Find all bracket pairs in the message
+        const allBrackets = [];
+        let bracketStart = -1;
+        let bracketCount = 0;
+        for (let i = 0; i < messageContent.length; i++) {
+          if (messageContent[i] === '[') {
+            if (bracketCount === 0) bracketStart = i;
+            bracketCount++;
+          } else if (messageContent[i] === ']') {
+            bracketCount--;
+            if (bracketCount === 0 && bracketStart !== -1) {
+              const bracketContent = messageContent.substring(bracketStart + 1, i);
+              // Check if this is not part of a markdown link (not followed by ()
+              const nextChar = messageContent[i + 1];
+              if (nextChar !== '(') {
+                allBrackets.push({ content: bracketContent, start: bracketStart, end: i });
+              }
+              bracketStart = -1;
+            }
           }
         }
         
-        // Also try nested pattern: [Map Title [Difficulty]]
+        // Take the last bracket that's not in a link text
+        if (allBrackets.length > 0) {
+          const lastBracket = allBrackets[allBrackets.length - 1];
+          // Check if it's not part of a markdown link text
+          const isInLinkText = linkTexts.some(linkText => linkText.includes(lastBracket.content));
+          if (!isInLinkText) {
+            difficulty = lastBracket.content;
+            console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty="${difficulty}" via bracket parsing`);
+          }
+        }
+        
+        // Fallback: simple patterns if bracket parsing didn't work
         if (!difficulty) {
-          const nestedMatch = messageContent.match(/\[([^\[]+)\s+\[([^\]]+)\]\]/);
-          if (nestedMatch) {
-            difficulty = nestedMatch[2];
-            console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty=${difficulty} via nested pattern`);
+          const difficultyPatterns = [
+            /\*\*[^\*]+\s+\[([^\]]+)\]\*\*/, // **Map Title [Difficulty]**
+            /\[([^\]]+)\](?!\()/, // [Difficulty] not followed by (
+          ];
+          
+          for (const pattern of difficultyPatterns) {
+            const match = messageContent.match(pattern);
+            if (match) {
+              difficulty = match[1];
+              console.log(`[DEBUG extractBeatmapInfoFromMessage] Found difficulty="${difficulty}" via pattern (fallback)`);
+              break;
+            }
           }
         }
         
@@ -752,20 +807,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       let statusMessage = '';
 
       if (isSaved) {
-        statusMessage = `\n\nThis map is **${beatmapStatusName}**. The score is saved on the OSU! servers.`;
+        statusMessage = `\nThis map is **${beatmapStatusName}**. The score is saved on the OSU! servers.`;
       } else {
         // Save to local database (only if not duplicate)
         try {
           const existing = await localScores.exists(guildId, userId, userScore);
           if (existing) {
-            statusMessage = `\n\nThe map is **${beatmapStatusName}**. This score is already saved.`;
+            statusMessage = `\nThe map is **${beatmapStatusName}**. This score is already saved.`;
           } else {
             await localScores.create(guildId, userId, osuUserId, userScore);
-            statusMessage = `\n\nThe map is **${beatmapStatusName}**. Teto will remember this score.`;
+            statusMessage = `\nThe map is **${beatmapStatusName}**. Teto will remember this score.`;
           }
         } catch (error) {
           console.error('Error saving local score:', error);
-          statusMessage = `\n\nThe map is **${beatmapStatusName}**. Failed to save score locally.`;
+          statusMessage = `\nThe map is **${beatmapStatusName}**. Failed to save score locally.`;
         }
       }
 
