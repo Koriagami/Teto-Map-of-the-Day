@@ -30,6 +30,66 @@ if (!TOKEN) {
   process.exit(1);
 }
 
+// Cache for rank emojis from guilds
+let rankEmojiCache = null;
+
+// Helper: find and cache rank emojis from guilds
+async function initializeRankEmojis() {
+  if (rankEmojiCache) return rankEmojiCache;
+  
+  rankEmojiCache = new Map();
+  const rankNames = ['D', 'C', 'B', 'A', 'S', 'SH', 'SS', 'SSH', 'X', 'XH'];
+  
+  try {
+    // Try to find emojis from any guild the bot is in
+    for (const [guildId, guild] of client.guilds.cache) {
+      try {
+        const emojis = await guild.emojis.fetch();
+        for (const [emojiId, emoji] of emojis) {
+          const emojiName = emoji.name?.toLowerCase();
+          if (emojiName && emojiName.startsWith('rank_')) {
+            const rankLetter = emojiName.replace('rank_', '').toUpperCase();
+            if (rankNames.includes(rankLetter) && !rankEmojiCache.has(rankLetter)) {
+              rankEmojiCache.set(rankLetter, emoji);
+              console.log(`[Rank Emoji] Found emoji for rank ${rankLetter} from guild ${guild.name}: ${emoji.name}`);
+            }
+          }
+        }
+        // If we found all rank emojis, we can stop searching
+        if (rankEmojiCache.size === rankNames.length) break;
+      } catch (error) {
+        // Skip guilds we can't access
+        continue;
+      }
+    }
+  } catch (error) {
+    console.error('[Rank Emoji] Error initializing rank emojis:', error);
+  }
+  
+  return rankEmojiCache;
+}
+
+// Helper: format rank with emoji
+async function formatRank(rank) {
+  if (!rank || rank === 'N/A') return 'N/A';
+  
+  const rankUpper = String(rank).toUpperCase();
+  
+  // Initialize emojis if not already done (lazy initialization)
+  if (!rankEmojiCache) {
+    await initializeRankEmojis();
+  }
+  
+  // Try to use cached emoji if available
+  if (rankEmojiCache && rankEmojiCache.has(rankUpper)) {
+    const emoji = rankEmojiCache.get(rankUpper);
+    return emoji.toString(); // Returns <:name:id> format
+  }
+  
+  // Fallback to emoji format (Discord will render if emoji exists in the guild)
+  return `:rank_${rankUpper}:`;
+}
+
 // Helper: today's date string YYYY-MM-DD
 function todayString() {
   const now = new Date();
@@ -193,7 +253,7 @@ async function getMapTitle(score) {
 }
 
 // Helper: format player stats from score object
-function formatPlayerStats(score) {
+async function formatPlayerStats(score) {
   // Safely extract score value - handle both number and object cases
   let scoreValue = 0;
   if (typeof score.score === 'number') {
@@ -204,6 +264,7 @@ function formatPlayerStats(score) {
   }
   
   const rank = score.rank || 'N/A';
+  const rankFormatted = await formatRank(rank);
   const pp = typeof score.pp === 'number' ? score.pp : 0;
   const accuracy = typeof score.accuracy === 'number' ? (score.accuracy * 100) : 0;
   const maxCombo = typeof score.max_combo === 'number' ? score.max_combo : 0;
@@ -213,7 +274,7 @@ function formatPlayerStats(score) {
   const countMiss = score.statistics?.count_miss || 0;
   
   let stats = `**Score Stats:**\n`;
-  stats += `• Rank: **${rank}**\n`;
+  stats += `• Rank: ${rankFormatted}\n`;
   stats += `• PP: **${pp.toFixed(2)}**\n`;
   stats += `• Accuracy: **${accuracy.toFixed(2)}%**\n`;
   stats += `• Max Combo: **${maxCombo.toLocaleString()}**\n`;
@@ -224,7 +285,7 @@ function formatPlayerStats(score) {
 }
 
 // Helper: format player stats in compact one-line format
-function formatPlayerStatsCompact(score) {
+async function formatPlayerStatsCompact(score) {
   // Safely extract score value - handle both number and object cases
   let scoreValue = 0;
   if (typeof score.score === 'number') {
@@ -235,6 +296,7 @@ function formatPlayerStatsCompact(score) {
   }
   
   const rank = score.rank || 'N/A';
+  const rankFormatted = await formatRank(rank);
   const pp = typeof score.pp === 'number' ? score.pp : 0;
   const accuracy = typeof score.accuracy === 'number' ? (score.accuracy * 100) : 0;
   const maxCombo = typeof score.max_combo === 'number' ? score.max_combo : 0;
@@ -243,7 +305,7 @@ function formatPlayerStatsCompact(score) {
   const count50 = score.statistics?.count_50 || 0;
   const countMiss = score.statistics?.count_miss || 0;
   
-  return `${rank} | ${pp.toFixed(2)}pp | ${accuracy.toFixed(2)}% | ${maxCombo.toLocaleString()}x | ${scoreValue.toLocaleString()} | ${count300}/${count100}/${count50}/${countMiss}`;
+  return `${rankFormatted} | ${pp.toFixed(2)}pp | ${accuracy.toFixed(2)}% | ${maxCombo.toLocaleString()}x | ${scoreValue.toLocaleString()} | ${count300}/${count100}/${count50}/${countMiss}`;
 }
 
 // Helper: get beatmap status name from status number
@@ -483,8 +545,11 @@ function extractOsuProfile(profileLink) {
 }
 
 // When ready
-client.once(Events.ClientReady, () => {
+client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
+  // Initialize rank emojis from guilds
+  await initializeRankEmojis();
+  console.log(`[Rank Emoji] Initialized ${rankEmojiCache?.size || 0} rank emojis`);
 });
 
 // Interaction handling
@@ -579,7 +644,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
           // Post challenge announcement to operational channel
           const beatmapLink = formatBeatmapLink(userScore);
-          const playerStats = formatPlayerStats(userScore);
+          const playerStats = await formatPlayerStats(userScore);
           const mapTitle = await getMapTitle(userScore);
           const difficultyLabel = `${mapTitle} [${difficulty}]`;
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
@@ -646,7 +711,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
           // Post challenge announcement to operational channel
           const beatmapLink = formatBeatmapLink(userScore);
-          const playerStats = formatPlayerStats(userScore);
+          const playerStats = await formatPlayerStats(userScore);
           const mapTitle = await getMapTitle(userScore);
           const difficultyLabel = `${mapTitle} [${difficulty}]`;
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
@@ -859,7 +924,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       // Format score display (same as challenge posting)
       const beatmapLink = formatBeatmapLink(userScore);
-      const playerStats = formatPlayerStats(userScore);
+      const playerStats = await formatPlayerStats(userScore);
       const mapTitle = await getMapTitle(userScore);
       const difficulty = userScore.beatmap.version;
       const difficultyLabel = `${mapTitle} [${difficulty}]`;
@@ -1033,11 +1098,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
             
             if (i === 0) {
               // First score: full format
-              const playerStats = formatPlayerStats(score);
+              const playerStats = await formatPlayerStats(score);
               message += `**Score #${i + 1}**\n${playerStats}`;
             } else {
               // Subsequent scores: compact one-line format
-              const compactStats = formatPlayerStatsCompact(score);
+              const compactStats = await formatPlayerStatsCompact(score);
               message += `**Score #${i + 1}**: ${compactStats}\n`;
             }
           }
@@ -1102,11 +1167,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
           
           if (i === 0) {
             // First score: full format
-            const playerStats = formatPlayerStats(record.score);
+            const playerStats = await formatPlayerStats(record.score);
             message += `**Score #${i + 1}**\n${playerStats}`;
           } else {
             // Subsequent scores: compact one-line format
-            const compactStats = formatPlayerStatsCompact(record.score);
+            const compactStats = await formatPlayerStatsCompact(record.score);
             message += `**Score #${i + 1}**: ${compactStats}\n`;
           }
         }

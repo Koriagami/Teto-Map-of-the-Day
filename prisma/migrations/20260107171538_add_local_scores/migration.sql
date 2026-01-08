@@ -17,3 +17,4 @@ CREATE INDEX "local_scores_guildId_discordUserId_idx" ON "local_scores"("guildId
 CREATE INDEX "local_scores_osuUserId_idx" ON "local_scores"("osuUserId");
 
 
+
