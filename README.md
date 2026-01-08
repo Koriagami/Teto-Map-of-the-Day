@@ -21,6 +21,7 @@ Discord bot for submitting and voting on osu! maps.
    OSU_CLIENT_ID=your_osu_client_id
    OSU_CLIENT_SECRET=your_osu_secret
    DATABASE_URL=postgresql://...  # Auto-set on Railway
+   PARENT_GUILD_ID=your_parent_guild_id  # Optional: Guild ID where rank emojis are stored
    ```
 
 2. **Install & Run**:

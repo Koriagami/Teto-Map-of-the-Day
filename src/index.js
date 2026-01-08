@@ -30,10 +30,13 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-// Cache for rank emojis from guilds
+// Parent guild ID for emojis (optional - if not set, will search all guilds)
+const PARENT_GUILD_ID = process.env.PARENT_GUILD_ID;
+
+// Cache for rank emojis from parent guild
 let rankEmojiCache = null;
 
-// Helper: find and cache rank emojis from guilds
+// Helper: find and cache rank emojis from parent guild
 async function initializeRankEmojis() {
   if (rankEmojiCache) return rankEmojiCache;
   
@@ -41,8 +44,23 @@ async function initializeRankEmojis() {
   const rankNames = ['D', 'C', 'B', 'A', 'S', 'SH', 'SS', 'SSH', 'X', 'XH'];
   
   try {
-    // Try to find emojis from any guild the bot is in
-    for (const [guildId, guild] of client.guilds.cache) {
+    let targetGuild = null;
+    
+    // If PARENT_GUILD_ID is set, use that specific guild
+    if (PARENT_GUILD_ID) {
+      try {
+        targetGuild = await client.guilds.fetch(PARENT_GUILD_ID);
+        console.log(`[Rank Emoji] Using parent guild: ${targetGuild.name} (${PARENT_GUILD_ID})`);
+      } catch (error) {
+        console.error(`[Rank Emoji] Failed to fetch parent guild ${PARENT_GUILD_ID}:`, error);
+        console.log(`[Rank Emoji] Falling back to searching all guilds...`);
+      }
+    }
+    
+    // If we have a target guild, use it; otherwise search all guilds
+    const guildsToSearch = targetGuild ? [targetGuild] : Array.from(client.guilds.cache.values());
+    
+    for (const guild of guildsToSearch) {
       try {
         const emojis = await guild.emojis.fetch();
         for (const [emojiId, emoji] of emojis) {
@@ -51,16 +69,22 @@ async function initializeRankEmojis() {
             const rankLetter = emojiName.replace('rank_', '').toUpperCase();
             if (rankNames.includes(rankLetter) && !rankEmojiCache.has(rankLetter)) {
               rankEmojiCache.set(rankLetter, emoji);
-              console.log(`[Rank Emoji] Found emoji for rank ${rankLetter} from guild ${guild.name}: ${emoji.name}`);
+              console.log(`[Rank Emoji] Found emoji for rank ${rankLetter} from guild ${guild.name}: ${emoji.name} (ID: ${emoji.id})`);
             }
           }
         }
         // If we found all rank emojis, we can stop searching
         if (rankEmojiCache.size === rankNames.length) break;
       } catch (error) {
-        // Skip guilds we can't access
+        console.error(`[Rank Emoji] Error fetching emojis from guild ${guild.name}:`, error);
         continue;
       }
+    }
+    
+    if (rankEmojiCache.size > 0) {
+      console.log(`[Rank Emoji] Successfully cached ${rankEmojiCache.size} rank emojis`);
+    } else {
+      console.warn(`[Rank Emoji] No rank emojis found. Make sure emojis named rank_D, rank_C, etc. exist in the parent guild.`);
     }
   } catch (error) {
     console.error('[Rank Emoji] Error initializing rank emojis:', error);

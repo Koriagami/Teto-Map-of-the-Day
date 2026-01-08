@@ -217,6 +217,9 @@ Required in `.env`:
 - `OSU_CLIENT_SECRET`: osu! OAuth application client secret
 - `DATABASE_URL`: PostgreSQL connection string (auto-set on Railway)
 
+Optional:
+- `PARENT_GUILD_ID`: Discord Guild ID where rank emojis (rank_D, rank_C, rank_B, rank_A, rank_S, rank_SH, rank_SS, rank_SSH, rank_X, rank_XH) are stored. If set, the bot will use emojis from this guild across all servers. If not set, the bot will search all guilds for rank emojis.
+
 ## Important Code Patterns
 
 ### Error Handling
