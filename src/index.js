@@ -1800,24 +1800,24 @@ async function generateWeeklyUpdate(guildId) {
       topDefenseStreaks.map(({ challenge, timeHeld }) => formatChallengeEntryWithDays(challenge, timeHeld))
     );
 
-    // Build message sections
+    // Build message sections with bullet points
     const sections = [];
     
     if (newChampionsEntries.length > 0) {
       sections.push('🏆 **New champions:**');
-      sections.push(...newChampionsEntries);
+      sections.push(...newChampionsEntries.map(entry => `• ${entry}`));
       sections.push(''); // Empty line
     }
 
     if (uncontestedEntries.length > 0) {
       sections.push('🫵 **New uncontested challenges:**');
-      sections.push(...uncontestedEntries);
+      sections.push(...uncontestedEntries.map(entry => `• ${entry}`));
       sections.push(''); // Empty line
     }
 
     if (defenseStreakEntries.length > 0) {
       sections.push('🛡️ **Longest defence streak:**');
-      sections.push(...defenseStreakEntries);
+      sections.push(...defenseStreakEntries.map(entry => `• ${entry}`));
     }
 
     if (sections.length === 0) {
