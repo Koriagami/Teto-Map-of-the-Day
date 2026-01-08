@@ -8,6 +8,8 @@ Discord bot for submitting and voting on osu! maps.
 - `/teto link <profile>` — Link Discord to OSU! profile
 - `/teto map submit <maplink> [mods]` — Submit map (once per day)
 - `/rsc [maplink]` — Issue or respond to score challenges
+- `/trs` — Record your unranked scores
+- `/tc` — Look up your scores for the map
 - `/test <maplink>` — Test OSU! API leaderboards
 - Auto reactions (👍/👎) with "meh" message on 4+ dislikes
 - PostgreSQL database with Prisma ORM
