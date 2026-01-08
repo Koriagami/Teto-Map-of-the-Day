@@ -41,11 +41,73 @@ let tetoEmoji = null;
 // Bot embed color: #c6da29 (13030697 in decimal)
 const BOT_EMBED_COLOR = 0xc6da29;
 
-// Helper: create embed with bot color from content
+// Discord embed description character limit
+const EMBED_DESCRIPTION_LIMIT = 4096;
+
+// Helper: create embed(s) with bot color from content
+// Returns an array of embeds (single embed if content fits, multiple if it needs splitting)
 function createEmbed(content) {
-  return new EmbedBuilder()
-    .setColor(BOT_EMBED_COLOR)
-    .setDescription(content);
+  if (!content || typeof content !== 'string') {
+    return [new EmbedBuilder().setColor(BOT_EMBED_COLOR).setDescription('')];
+  }
+
+  // If content fits in one embed, return single embed
+  if (content.length <= EMBED_DESCRIPTION_LIMIT) {
+    return [new EmbedBuilder()
+      .setColor(BOT_EMBED_COLOR)
+      .setDescription(content)];
+  }
+
+  // Content is too long, split into multiple embeds
+  const embeds = [];
+  const lines = content.split('\n');
+  let currentChunk = '';
+  
+  for (const line of lines) {
+    // Check if adding this line would exceed the limit
+    const testChunk = currentChunk ? `${currentChunk}\n${line}` : line;
+    
+    if (testChunk.length > EMBED_DESCRIPTION_LIMIT) {
+      // Current chunk is full, save it and start a new one
+      if (currentChunk) {
+        embeds.push(new EmbedBuilder()
+          .setColor(BOT_EMBED_COLOR)
+          .setDescription(currentChunk));
+      }
+      
+      // If a single line is too long, split it by character
+      if (line.length > EMBED_DESCRIPTION_LIMIT) {
+        // Split the long line into chunks
+        for (let i = 0; i < line.length; i += EMBED_DESCRIPTION_LIMIT) {
+          const chunk = line.substring(i, i + EMBED_DESCRIPTION_LIMIT);
+          embeds.push(new EmbedBuilder()
+            .setColor(BOT_EMBED_COLOR)
+            .setDescription(chunk));
+        }
+        currentChunk = '';
+      } else {
+        currentChunk = line;
+      }
+    } else {
+      // Add line to current chunk
+      currentChunk = testChunk;
+    }
+  }
+  
+  // Add remaining chunk if any
+  if (currentChunk) {
+    embeds.push(new EmbedBuilder()
+      .setColor(BOT_EMBED_COLOR)
+      .setDescription(currentChunk));
+  }
+  
+  // Discord allows max 10 embeds per message
+  if (embeds.length > 10) {
+    console.warn(`Content was split into ${embeds.length} embeds, but Discord only allows 10. Truncating to 10.`);
+    return embeds.slice(0, 10);
+  }
+  
+  return embeds;
 }
 
 // Helper: find and cache emojis from parent guild
@@ -643,7 +705,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const guildId = interaction.guildId;
       if (!guildId) {
         return interaction.editReply({ 
-          embeds: [createEmbed('This command can only be used in a server.')],
+          embeds: createEmbed('This command can only be used in a server.'),
           ephemeral: true 
         });
       }
@@ -654,7 +716,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'challenges');
       if (opChannelResult.error) {
         return interaction.editReply({ 
-          embeds: [createEmbed(opChannelResult.error)],
+          embeds: createEmbed(opChannelResult.error),
           ephemeral: true 
         });
       }
@@ -664,7 +726,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const association = await associations.get(guildId, userId);
       if (!association || !association.osuUserId) {
         return interaction.editReply({ 
-          embeds: [createEmbed('You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.')],
+          embeds: createEmbed('You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.'),
           ephemeral: true 
         });
       }
@@ -681,7 +743,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         
         if (!recentScores || recentScores.length === 0) {
           return interaction.editReply({ 
-            embeds: [createEmbed('You have no recent scores. Play a map first!')],
+            embeds: createEmbed('You have no recent scores. Play a map first!'),
             ephemeral: true 
           });
         }
@@ -691,7 +753,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // Validate score object
         if (!isValidScore(userScore)) {
           return interaction.editReply({ 
-            embeds: [createEmbed('Invalid score data received from OSU API. Please play a map first and try again.')],
+            embeds: createEmbed('Invalid score data received from OSU API. Please play a map first and try again.'),
             ephemeral: true 
           });
         }
@@ -707,7 +769,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const mapTitle = await getMapTitle(userScore);
           const difficultyLabel = `${mapTitle} [${difficulty}]`;
           await interaction.editReply({ 
-            embeds: [createEmbed(`There is already an active challenge for **${difficultyLabel}**.\nORA ORA! WE ARE ENTERING THE COMPETITION!`)]
+            embeds: createEmbed(`There is already an active challenge for **${difficultyLabel}**.\nORA ORA! WE ARE ENTERING THE COMPETITION!`)
           });
           // Continue to PART B below
         } else {
@@ -729,25 +791,25 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
           const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
-          await opChannel.send({ embeds: [createEmbed(challengeMessage)] });
+          await opChannel.send({ embeds: createEmbed(challengeMessage) });
 
           return interaction.editReply({ 
-            embeds: [createEmbed(`Challenge issued for ${difficultyLink}!`)]
+            embeds: createEmbed(`Challenge issued for ${difficultyLink}!`)
           });
         }
       } else {
         // With param - check if link contains osu.ppy.sh
         if (!respondForMapLink.includes('osu.ppy.sh')) {
-        return interaction.editReply({ 
-          embeds: [createEmbed('Invalid map link. The link must contain "osu.ppy.sh".')],
-          ephemeral: true 
-        });
+          return interaction.editReply({ 
+          embeds: createEmbed('Invalid map link. The link must contain "osu.ppy.sh".'),
+            ephemeral: true 
+          });
         }
 
         beatmapId = extractBeatmapId(respondForMapLink);
         if (!beatmapId) {
           return interaction.editReply({ 
-            embeds: [createEmbed('Could not extract beatmap ID from the link.')],
+            embeds: createEmbed('Could not extract beatmap ID from the link.'),
             ephemeral: true 
           });
         }
@@ -758,16 +820,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // Debug logging
         if (!userScore) {
           console.log(`No score found for beatmap ${beatmapId}, user ${osuUserId}`);
-        return interaction.editReply({ 
-          embeds: [createEmbed('You have no score for this beatmap. Play it first!')],
-          ephemeral: true 
-        });
+          return interaction.editReply({ 
+          embeds: createEmbed('You have no score for this beatmap. Play it first!'),
+            ephemeral: true 
+          });
         }
         
         if (!isValidScore(userScore)) {
           console.log(`Invalid score data for beatmap ${beatmapId}, user ${osuUserId}:`, JSON.stringify(userScore, null, 2));
           return interaction.editReply({ 
-            embeds: [createEmbed('Invalid score data received from OSU API. Please try again.')],
+            embeds: createEmbed('Invalid score data received from OSU API. Please try again.'),
             ephemeral: true 
           });
         }
@@ -796,15 +858,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
           const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
-          await opChannel.send({ embeds: [createEmbed(challengeMessage)] });
+          await opChannel.send({ embeds: createEmbed(challengeMessage) });
 
           return interaction.editReply({ 
-            embeds: [createEmbed(`Huh? Looks like we are uncontested on **${difficultyLabel}**! COME AND CHALLENGE US!`)]
+            embeds: createEmbed(`Huh? Looks like we are uncontested on **${difficultyLabel}**! COME AND CHALLENGE US!`)
           });
         } else {
           // Challenge exists, proceed to PART B
           await interaction.editReply({ 
-            embeds: [createEmbed('ORA ORA! WE ARE ENTERING THE COMPETITION!')]
+            embeds: createEmbed('ORA ORA! WE ARE ENTERING THE COMPETITION!')
           });
           // Continue to PART B below
         }
@@ -814,7 +876,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // At this point, we have existingChallenge and we need to compare scores
       if (!existingChallenge) {
         return interaction.editReply({ 
-          embeds: [createEmbed('No active challenge found. This should not happen.')],
+          embeds: createEmbed('No active challenge found. This should not happen.'),
           ephemeral: true 
         });
       }
@@ -825,10 +887,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (!responderScore || responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
         responderScore = await getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
         if (!responderScore) {
-        return interaction.editReply({ 
-          embeds: [createEmbed('You have no score for this beatmap. Play it first!')],
-          ephemeral: true 
-        });
+          return interaction.editReply({ 
+          embeds: createEmbed('You have no score for this beatmap. Play it first!'),
+            ephemeral: true 
+          });
         }
       }
 
@@ -838,7 +900,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // Ensure challengerScore is an object (Prisma JSON field)
       if (typeof challengerScore !== 'object' || challengerScore === null) {
         return interaction.editReply({ 
-          embeds: [createEmbed('Error: Challenge data is invalid. Please create a new challenge.')],
+          embeds: createEmbed('Error: Challenge data is invalid. Please create a new challenge.'),
           ephemeral: true 
         });
       }
@@ -856,7 +918,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       } catch (error) {
         console.error('Error comparing scores:', error);
         return interaction.editReply({ 
-          embeds: [createEmbed(`Error comparing scores: ${error.message}`)],
+          embeds: createEmbed(`Error comparing scores: ${error.message}`),
           ephemeral: true 
         });
       }
@@ -895,18 +957,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
 
       // Post comparison results to Challenges channel
-      await opChannel.send({ embeds: [createEmbed(responseMessage)] });
+      await opChannel.send({ embeds: createEmbed(responseMessage) });
 
       // Send confirmation to user
       return interaction.editReply({ 
-        embeds: [createEmbed(`Challenge response posted to <#${opChannel.id}>!`)],
+        embeds: createEmbed(`Challenge response posted to <#${opChannel.id}>!`),
         ephemeral: true 
       });
 
     } catch (error) {
       console.error('Error in /rsc command:', error);
       return interaction.editReply({ 
-        embeds: [createEmbed(`Error: ${error.message}`)],
+        embeds: createEmbed(`Error: ${error.message}`),
         ephemeral: true 
       });
     }
@@ -920,7 +982,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const guildId = interaction.guildId;
       if (!guildId) {
         return interaction.editReply({ 
-          embeds: [createEmbed('This command can only be used in a server.')],
+          embeds: createEmbed('This command can only be used in a server.'),
           ephemeral: true 
         });
       }
@@ -930,7 +992,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const association = await associations.get(guildId, userId);
       if (!association || !association.osuUserId) {
         return interaction.editReply({ 
-          embeds: [createEmbed('You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.')],
+          embeds: createEmbed('You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.'),
           ephemeral: true 
         });
       }
@@ -943,7 +1005,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       
       if (!recentScores || recentScores.length === 0) {
         return interaction.editReply({ 
-          embeds: [createEmbed('You have no recent scores. Play a map first!')],
+          embeds: createEmbed('You have no recent scores. Play a map first!'),
           ephemeral: true 
         });
       }
@@ -953,7 +1015,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // Validate score object
       if (!isValidScore(userScore)) {
         return interaction.editReply({ 
-          embeds: [createEmbed('Invalid score data received from OSU API. Please play a map first and try again.')],
+          embeds: createEmbed('Invalid score data received from OSU API. Please play a map first and try again.'),
           ephemeral: true 
         });
       }
@@ -1034,13 +1096,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const message = `Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
 
       return interaction.editReply({ 
-        embeds: [createEmbed(message)]
+        embeds: createEmbed(message)
       });
 
     } catch (error) {
       console.error('Error in /trs command:', error);
       return interaction.editReply({ 
-        embeds: [createEmbed(`Error: ${error.message}`)],
+        embeds: createEmbed(`Error: ${error.message}`),
         ephemeral: true 
       });
     }
@@ -1054,7 +1116,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const guildId = interaction.guildId;
       if (!guildId) {
         return interaction.editReply({ 
-          embeds: [createEmbed('This command can only be used in a server.')],
+          embeds: createEmbed('This command can only be used in a server.'),
           ephemeral: true 
         });
       }
@@ -1065,7 +1127,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const association = await associations.get(guildId, userId);
       if (!association || !association.osuUserId) {
         return interaction.editReply({ 
-          embeds: [createEmbed('You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.')],
+          embeds: createEmbed('You need to link your Discord profile to your OSU! profile first. Use `/teto link` command to do so.'),
           ephemeral: true 
         });
       }
@@ -1088,7 +1150,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       if (!beatmapInfo) {
         return interaction.editReply({ 
-          embeds: [createEmbed('No difficulty link found in the last 20 messages of this channel.')],
+          embeds: createEmbed('No difficulty link found in the last 20 messages of this channel.'),
           ephemeral: true 
         });
       }
@@ -1262,14 +1324,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       // Step 3: No score found in either place
         return interaction.editReply({ 
-          embeds: [createEmbed(`No score found for difficulty **${difficulty}** on this beatmap. Play it first!`)],
+          embeds: createEmbed(`No score found for difficulty **${difficulty}** on this beatmap. Play it first!`),
           ephemeral: true 
         });
 
     } catch (error) {
       console.error('Error in /tc command:', error);
       return interaction.editReply({ 
-        embeds: [createEmbed(`Error: ${error.message}`)],
+        embeds: createEmbed(`Error: ${error.message}`),
         ephemeral: true 
       });
     }
@@ -1283,7 +1345,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const guildId = interaction.guildId;
   if (!guildId) {
     return interaction.reply({ 
-      embeds: [createEmbed('This command can only be used in a server.')],
+      embeds: createEmbed('This command can only be used in a server.'),
       ephemeral: true 
     });
   }
@@ -1294,7 +1356,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // only admins (including server owner)
     const member = interaction.member;
     if (!member) {
-      return interaction.reply({ embeds: [createEmbed('Unable to verify permissions. Please try again.')], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed('Unable to verify permissions. Please try again.'), ephemeral: true });
     }
     
     // Check if user is guild owner
@@ -1305,13 +1367,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const hasAdmin = memberPerms && memberPerms.has(PermissionsBitField.Flags.Administrator);
     
     if (!isOwner && !hasAdmin) {
-      return interaction.reply({ embeds: [createEmbed('Only administrators can run this command.')], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed('Only administrators can run this command.'), ephemeral: true });
     }
     
     const channelType = interaction.options.getString('set_this_channel_for');
     if (!channelType || (channelType !== 'tmotd' && channelType !== 'challenges')) {
       return interaction.reply({ 
-        embeds: [createEmbed('Invalid channel type. Please select either "TMOTD" or "Challenges".')], 
+        embeds: createEmbed('Invalid channel type. Please select either "TMOTD" or "Challenges".'), 
         ephemeral: true 
       });
     }
@@ -1321,7 +1383,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const channelTypeName = channelType === 'tmotd' ? 'TMOTD' : 'Challenges';
     const message = await formatTetoText(`Teto configured! ${channelTypeName} channel set to <#${channel.id}>.`);
     return interaction.reply({ 
-      embeds: [createEmbed(message)], 
+      embeds: createEmbed(message), 
       ephemeral: true 
     });
   }
@@ -1333,7 +1395,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // Validate link format - must contain "osu.ppy.sh/users/"
     if (!profileLink || !profileLink.includes('osu.ppy.sh/users/')) {
       return interaction.reply({ 
-        embeds: [createEmbed('Invalid OSU! profile link. The link must contain "osu.ppy.sh/users/" in it.\nExample: https://osu.ppy.sh/users/12345 or https://osu.ppy.sh/users/username')], 
+        embeds: createEmbed('Invalid OSU! profile link. The link must contain "osu.ppy.sh/users/" in it.\nExample: https://osu.ppy.sh/users/12345 or https://osu.ppy.sh/users/username'), 
         ephemeral: true 
       });
     }
@@ -1342,7 +1404,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!profileInfo) {
       return interaction.reply({ 
-        embeds: [createEmbed('Invalid OSU! profile link format. Please provide a valid link like:\n- https://osu.ppy.sh/users/12345\n- https://osu.ppy.sh/users/username')], 
+        embeds: createEmbed('Invalid OSU! profile link format. Please provide a valid link like:\n- https://osu.ppy.sh/users/12345\n- https://osu.ppy.sh/users/username'), 
         ephemeral: true 
       });
     }
@@ -1352,7 +1414,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (existingAssociation) {
       const existingDisplayName = existingAssociation.osuUsername || `User ${existingAssociation.osuUserId}`;
       return interaction.reply({ 
-        embeds: [createEmbed(`You already have an OSU! profile linked: **${existingDisplayName}**\nProfile: ${existingAssociation.profileLink}\n\nTo link a different profile, please contact an administrator.`)], 
+        embeds: createEmbed(`You already have an OSU! profile linked: **${existingDisplayName}**\nProfile: ${existingAssociation.profileLink}\n\nTo link a different profile, please contact an administrator.`), 
         ephemeral: true 
       });
     }
@@ -1367,7 +1429,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (existingOsuLink && existingOsuLink.discordUserId !== interaction.user.id) {
       return interaction.reply({ 
-        embeds: [createEmbed(`This OSU! profile is already linked to another Discord user (<@${existingOsuLink.discordUserId}>).\nEach OSU! profile can only be linked to one Discord account per server.`)], 
+        embeds: createEmbed(`This OSU! profile is already linked to another Discord user (<@${existingOsuLink.discordUserId}>).\nEach OSU! profile can only be linked to one Discord account per server.`), 
         ephemeral: true 
       });
     }
@@ -1381,7 +1443,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       
       if (!osuUser) {
         return interaction.editReply({ 
-          embeds: [createEmbed(`The OSU! profile you provided does not exist.\nPlease check the link and try again.`)]
+          embeds: createEmbed(`The OSU! profile you provided does not exist.\nPlease check the link and try again.`)
         });
       }
 
@@ -1398,12 +1460,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
 
       return interaction.editReply({ 
-        embeds: [createEmbed(`✅ Successfully linked your Discord account to OSU! profile: **${verifiedUsername}**\nProfile: ${verifiedProfileLink}`)]
+        embeds: createEmbed(`✅ Successfully linked your Discord account to OSU! profile: **${verifiedUsername}**\nProfile: ${verifiedProfileLink}`)
       });
     } catch (error) {
       console.error('Error verifying OSU profile:', error);
       return interaction.editReply({ 
-        embeds: [createEmbed(`Error verifying OSU! profile: ${error.message}\nPlease try again later.`)]
+        embeds: createEmbed(`Error verifying OSU! profile: ${error.message}\nPlease try again later.`)
       });
     }
   }
@@ -1413,7 +1475,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // only admins (including server owner)
     const member = interaction.member;
     if (!member) {
-      return interaction.reply({ embeds: [createEmbed('Unable to verify permissions. Please try again.')], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed('Unable to verify permissions. Please try again.'), ephemeral: true });
     }
     
     // Check if user is guild owner
@@ -1424,7 +1486,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const hasAdmin = memberPerms && memberPerms.has(PermissionsBitField.Flags.Administrator);
     
     if (!isOwner && !hasAdmin) {
-      return interaction.reply({ embeds: [createEmbed('Only administrators can run this command.')], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed('Only administrators can run this command.'), ephemeral: true });
     }
 
     await interaction.deferReply({ ephemeral: true });
@@ -1434,7 +1496,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'challenges');
       if (opChannelResult.error || !opChannelResult.channel) {
         return interaction.editReply({ 
-          embeds: [createEmbed(opChannelResult.error || 'Challenges channel is not configured. Use `/teto setup` to configure it.')],
+          embeds: createEmbed(opChannelResult.error || 'Challenges channel is not configured. Use `/teto setup` to configure it.'),
           ephemeral: true 
         });
       }
@@ -1444,7 +1506,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const botPermissions = opChannelResult.channel.permissionsFor(botMember);
       if (!botPermissions || !botPermissions.has(PermissionsBitField.Flags.SendMessages)) {
         return interaction.editReply({ 
-          embeds: [createEmbed(`❌ Bot is missing permissions to send messages in <#${opChannelResult.channel.id}>. Please grant the bot "Send Messages" permission in that channel.`)],
+          embeds: createEmbed(`❌ Bot is missing permissions to send messages in <#${opChannelResult.channel.id}>. Please grant the bot "Send Messages" permission in that channel.`),
           ephemeral: true 
         });
       }
@@ -1455,25 +1517,25 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (messages && messages.length > 0) {
         // Post messages to challenges channel (suppress embeds/thumbnails)
         try {
-          for (const message of messages) {
+          for (const embedArray of messages) {
             await opChannelResult.channel.send({
-              embeds: [createEmbed(message)],
+              embeds: embedArray,
             });
-          }
-          return interaction.editReply({ 
-            embeds: [createEmbed(`✅ Weekly challenges report posted to <#${opChannelResult.channel.id}>!`)],
-            ephemeral: true 
-          });
+        }
+        return interaction.editReply({ 
+            embeds: createEmbed(`✅ Weekly challenges report posted to <#${opChannelResult.channel.id}>!`),
+          ephemeral: true 
+        });
         } catch (sendError) {
           console.error('Error sending report messages:', sendError);
           return interaction.editReply({ 
-            embeds: [createEmbed(`❌ Failed to post report to <#${opChannelResult.channel.id}>. Error: ${sendError.message}\n\nPlease check that the bot has "Send Messages" permission in that channel.`)],
+            embeds: createEmbed(`❌ Failed to post report to <#${opChannelResult.channel.id}>. Error: ${sendError.message}\n\nPlease check that the bot has "Send Messages" permission in that channel.`),
             ephemeral: true 
           });
         }
       } else {
         return interaction.editReply({ 
-          embeds: [createEmbed('No challenges data to report for the last 30 days.')],
+          embeds: createEmbed('No challenges data to report for the last 30 days.'),
           ephemeral: true 
         });
       }
@@ -1481,13 +1543,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       console.error('Error generating challenges report:', error);
       // Check if it's a permissions error
       if (error.message && (error.message.includes('permission') || error.message.includes('Missing') || error.code === 50013)) {
-        return interaction.editReply({ 
-          embeds: [createEmbed(`❌ Missing permissions: ${error.message}\n\nPlease ensure the bot has "Send Messages" permission in the Challenges channel.`)],
+      return interaction.editReply({ 
+          embeds: createEmbed(`❌ Missing permissions: ${error.message}\n\nPlease ensure the bot has "Send Messages" permission in the Challenges channel.`),
           ephemeral: true 
         });
       }
       return interaction.editReply({ 
-        embeds: [createEmbed(`Error generating report: ${error.message}`)],
+        embeds: createEmbed(`Error generating report: ${error.message}`),
         ephemeral: true 
       });
     }
@@ -1497,12 +1559,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (subcommandGroup === 'map' && sub === 'submit') {
     const mapLink = interaction.options.getString('maplink');
     if (!mapLink || !mapLink.includes('osu.ppy.sh')) {
-      return interaction.reply({ embeds: [createEmbed("Impossible to submit the map - link doesn't contain OSU! map")], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed("Impossible to submit the map - link doesn't contain OSU! map"), ephemeral: true });
     }
     const today = todayString();
     const hasSubmitted = await submissions.hasSubmittedToday(guildId, interaction.user.id, today);
     if (hasSubmitted) {
-      return interaction.reply({ embeds: [createEmbed('You already submitted a map today!')], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed('You already submitted a map today!'), ephemeral: true });
     }
 
     // collect mods
@@ -1515,7 +1577,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     // fetch op channel for TMOTD
     const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'tmotd');
     if (opChannelResult.error) {
-      return interaction.reply({ embeds: [createEmbed(opChannelResult.error)], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed(opChannelResult.error), ephemeral: true });
     }
     const opChannel = opChannelResult.channel;
     const opChannelId = opChannelResult.channelId;
@@ -1526,7 +1588,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     try {
-      const sent = await opChannel.send({ embeds: [createEmbed(msgContent)] });
+      const sent = await opChannel.send({ embeds: createEmbed(msgContent) });
       // bot adds its own reactions (non-critical if this fails)
       try {
         await sent.react('👍');
@@ -1536,10 +1598,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       // store submission
       await submissions.create(guildId, interaction.user.id, today);
-      return interaction.reply({ embeds: [createEmbed(`Map submitted to <#${opChannelId}>!`)], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed(`Map submitted to <#${opChannelId}>!`), ephemeral: true });
     } catch (err) {
       console.error('Failed to post submission:', err);
-      return interaction.reply({ embeds: [createEmbed('Failed to submit the map. Check bot permissions in the operating channel.')], ephemeral: true });
+      return interaction.reply({ embeds: createEmbed('Failed to submit the map. Check bot permissions in the operating channel.'), ephemeral: true });
     }
   }
 
@@ -1582,7 +1644,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
         : `This map of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`;
       const newText = await formatTetoText(baseText);
       try {
-        await msg.edit({ embeds: [createEmbed(newText)] });
+        await msg.edit({ embeds: createEmbed(newText) });
       } catch (err) {
         console.error('Failed to edit message on meh vote:', err);
       }
@@ -1712,11 +1774,11 @@ async function generateWeeklyUpdate(guildId) {
     // Calculate time held for each challenge (from updatedAt to now - when current champion took ownership)
     const challengesWithTimeHeld = allChallenges
       .filter(challenge => {
-        // Verify challenge belongs to this guild (safety check)
-        if (challenge.guildId !== guildId) {
-          console.warn(`Challenge ${challenge.id} has mismatched guildId. Expected ${guildId}, got ${challenge.guildId}`);
-          return false;
-        }
+      // Verify challenge belongs to this guild (safety check)
+      if (challenge.guildId !== guildId) {
+        console.warn(`Challenge ${challenge.id} has mismatched guildId. Expected ${guildId}, got ${challenge.guildId}`);
+        return false;
+      }
         return true;
       })
       .map(challenge => {
@@ -1767,81 +1829,18 @@ async function generateWeeklyUpdate(guildId) {
     const header = await formatTetoText('**TETO WEEKLY UPDATE!**\n\n');
     const content = sections.join('\n');
     
-    // Discord message limit is 2000 characters
-    const MAX_MESSAGE_LENGTH = 2000;
-    const messages = [];
-    
     // Build full content with header
     const fullContent = header + content;
     
-    // Check if single message fits (with separators at start and end)
-    const separatorWithNewline = separator + '\n';
-    const separatorLength = separatorWithNewline.length;
-    const singleMessage = `${separatorWithNewline}${fullContent}\n${separator}`;
+    // Use createEmbed to handle splitting - it will automatically split if content exceeds 4096 chars
+    // and return an array of embeds
+    const embeds = createEmbed(fullContent);
     
-    if (singleMessage.length <= MAX_MESSAGE_LENGTH) {
-      // Fits in one message - add separators at start and end
-      messages.push(singleMessage);
-    } else {
-      // Split by lines, trying to fit maximum number of lines per message
-      const lines = fullContent.split('\n');
-      const headerLines = header.split('\n');
-      const contentLines = content.split('\n');
-      
-      let currentLines = [];
-      let isFirstMessage = true;
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const testLines = [...currentLines, line];
-        const testContent = testLines.join('\n');
-        
-        // Calculate message length accounting for separators
-        let testMessageLength;
-        if (isFirstMessage && i === lines.length - 1) {
-          // Only one message: separator at start and end
-          testMessageLength = separatorLength + testContent.length + separatorLength;
-        } else if (isFirstMessage) {
-          // First message: separator at start only
-          testMessageLength = separatorLength + testContent.length;
-        } else if (i === lines.length - 1) {
-          // Last message: separator at end only
-          testMessageLength = testContent.length + separatorLength;
-        } else {
-          // Middle message: no separators
-          testMessageLength = testContent.length;
-        }
-        
-        if (testMessageLength > MAX_MESSAGE_LENGTH && currentLines.length > 0) {
-          // Current message is full, finalize it
-          const finalizedContent = currentLines.join('\n');
-          if (isFirstMessage) {
-            // First message: separator at start
-            messages.push(`${separatorWithNewline}${finalizedContent}`);
-            isFirstMessage = false;
-          } else {
-            // Middle message: no separators, no header
-            messages.push(finalizedContent);
-          }
-          // Start a new message with current line
-          currentLines = [line];
-        } else {
-          // Add line to current message
-          currentLines.push(line);
-        }
-      }
-      
-      // Finalize the last message with separator at end
-      if (currentLines.length > 0) {
-        const finalizedContent = currentLines.join('\n');
-        if (isFirstMessage) {
-          // Only one message: separator at start and end
-          messages.push(`${separatorWithNewline}${finalizedContent}\n${separator}`);
-        } else {
-          // Last of multiple messages: separator only at end
-          messages.push(`${finalizedContent}\n${separator}`);
-        }
-      }
+    // Return array of embed arrays (each message can contain up to 10 embeds)
+    // Since createEmbed already handles splitting, we just need to chunk embeds into groups of 10
+    const messages = [];
+    for (let i = 0; i < embeds.length; i += 10) {
+      messages.push(embeds.slice(i, i + 10));
     }
 
     return messages;
@@ -1875,10 +1874,10 @@ cron.schedule('0 16 * * 6', async () => {
 
         const messages = await generateWeeklyUpdate(guildId);
         if (messages && messages.length > 0) {
-          // Post messages with embeds suppressed (no thumbnails)
-          for (const message of messages) {
+          // Post messages as embeds (each message is already an array of embeds)
+          for (const embedArray of messages) {
             await opChannelResult.channel.send({
-              embeds: [createEmbed(message)],
+              embeds: embedArray,
             });
           }
           console.log(`Weekly update posted for guild ${guildId}`);
