@@ -33,12 +33,15 @@ if (!TOKEN) {
 // Parent guild ID for emojis (optional - if not set, will search all guilds)
 const PARENT_GUILD_ID = process.env.PARENT_GUILD_ID;
 
-// Cache for rank emojis from parent guild
+// Cache for emojis from parent guild
 let rankEmojiCache = null;
+let tetoEmoji = null;
 
-// Helper: find and cache rank emojis from parent guild
-async function initializeRankEmojis() {
-  if (rankEmojiCache) return rankEmojiCache;
+// Helper: find and cache emojis from parent guild
+async function initializeEmojis() {
+  if (rankEmojiCache && tetoEmoji !== null) {
+    return { rankEmojiCache, tetoEmoji };
+  }
   
   rankEmojiCache = new Map();
   const rankNames = ['D', 'C', 'B', 'A', 'S', 'SH', 'SS', 'SSH', 'X', 'XH'];
@@ -50,10 +53,10 @@ async function initializeRankEmojis() {
     if (PARENT_GUILD_ID) {
       try {
         targetGuild = await client.guilds.fetch(PARENT_GUILD_ID);
-        console.log(`[Rank Emoji] Using parent guild: ${targetGuild.name} (${PARENT_GUILD_ID})`);
+        console.log(`[Emoji] Using parent guild: ${targetGuild.name} (${PARENT_GUILD_ID})`);
       } catch (error) {
-        console.error(`[Rank Emoji] Failed to fetch parent guild ${PARENT_GUILD_ID}:`, error);
-        console.log(`[Rank Emoji] Falling back to searching all guilds...`);
+        console.error(`[Emoji] Failed to fetch parent guild ${PARENT_GUILD_ID}:`, error);
+        console.log(`[Emoji] Falling back to searching all guilds...`);
       }
     }
     
@@ -65,31 +68,51 @@ async function initializeRankEmojis() {
         const emojis = await guild.emojis.fetch();
         for (const [emojiId, emoji] of emojis) {
           const emojiName = emoji.name?.toLowerCase();
+          
+          // Cache rank emojis
           if (emojiName && emojiName.startsWith('rank_')) {
             const rankLetter = emojiName.replace('rank_', '').toUpperCase();
             if (rankNames.includes(rankLetter) && !rankEmojiCache.has(rankLetter)) {
               rankEmojiCache.set(rankLetter, emoji);
-              console.log(`[Rank Emoji] Found emoji for rank ${rankLetter} from guild ${guild.name}: ${emoji.name} (ID: ${emoji.id})`);
+              console.log(`[Emoji] Found emoji for rank ${rankLetter} from guild ${guild.name}: ${emoji.name} (ID: ${emoji.id})`);
             }
           }
+          
+          // Cache teto emoji
+          if (emojiName === 'teto' && !tetoEmoji) {
+            tetoEmoji = emoji;
+            console.log(`[Emoji] Found teto emoji from guild ${guild.name}: ${emoji.name} (ID: ${emoji.id})`);
+          }
         }
-        // If we found all rank emojis, we can stop searching
-        if (rankEmojiCache.size === rankNames.length) break;
+        // If we found all emojis, we can stop searching
+        if (rankEmojiCache.size === rankNames.length && tetoEmoji) break;
       } catch (error) {
-        console.error(`[Rank Emoji] Error fetching emojis from guild ${guild.name}:`, error);
+        console.error(`[Emoji] Error fetching emojis from guild ${guild.name}:`, error);
         continue;
       }
     }
     
     if (rankEmojiCache.size > 0) {
-      console.log(`[Rank Emoji] Successfully cached ${rankEmojiCache.size} rank emojis`);
+      console.log(`[Emoji] Successfully cached ${rankEmojiCache.size} rank emojis`);
     } else {
-      console.warn(`[Rank Emoji] No rank emojis found. Make sure emojis named rank_D, rank_C, etc. exist in the parent guild.`);
+      console.warn(`[Emoji] No rank emojis found. Make sure emojis named rank_D, rank_C, etc. exist in the parent guild.`);
+    }
+    
+    if (tetoEmoji) {
+      console.log(`[Emoji] Successfully cached teto emoji`);
+    } else {
+      console.warn(`[Emoji] No teto emoji found. Make sure an emoji named 'teto' exists in the parent guild.`);
     }
   } catch (error) {
-    console.error('[Rank Emoji] Error initializing rank emojis:', error);
+    console.error('[Emoji] Error initializing emojis:', error);
   }
   
+  return { rankEmojiCache, tetoEmoji };
+}
+
+// Legacy function name for backward compatibility
+async function initializeRankEmojis() {
+  await initializeEmojis();
   return rankEmojiCache;
 }
 
@@ -101,7 +124,7 @@ async function formatRank(rank) {
   
   // Initialize emojis if not already done (lazy initialization)
   if (!rankEmojiCache) {
-    await initializeRankEmojis();
+    await initializeEmojis();
   }
   
   // Try to use cached emoji if available
@@ -112,6 +135,27 @@ async function formatRank(rank) {
   
   // Fallback to emoji format (Discord will render if emoji exists in the guild)
   return `:rank_${rankUpper}:`;
+}
+
+// Helper: replace "Teto" with emoji + "Teto" in text
+async function formatTetoText(text) {
+  if (!text || typeof text !== 'string') return text;
+  
+  // Initialize emojis if not already done (lazy initialization)
+  if (tetoEmoji === null) {
+    await initializeEmojis();
+  }
+  
+  // Replace "Teto" with emoji + "Teto" (case-sensitive, whole word only)
+  // Use word boundary regex to match whole words only
+  const tetoRegex = /\bTeto\b/g;
+  
+  if (tetoEmoji) {
+    return text.replace(tetoRegex, `${tetoEmoji.toString()} Teto`);
+  }
+  
+  // Fallback to emoji format if emoji not found
+  return text.replace(tetoRegex, `:teto: Teto`);
 }
 
 // Helper: today's date string YYYY-MM-DD
@@ -571,9 +615,9 @@ function extractOsuProfile(profileLink) {
 // When ready
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
-  // Initialize rank emojis from guilds
-  await initializeRankEmojis();
-  console.log(`[Rank Emoji] Initialized ${rankEmojiCache?.size || 0} rank emojis`);
+  // Initialize emojis from guilds
+  await initializeEmojis();
+  console.log(`[Emoji] Initialized ${rankEmojiCache?.size || 0} rank emojis and ${tetoEmoji ? 'teto' : 'no teto'} emoji`);
 });
 
 // Interaction handling
@@ -968,7 +1012,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             statusMessage = `\nThe map is **${beatmapStatusName}**. This score is already saved.`;
           } else {
             await localScores.create(guildId, userId, osuUserId, userScore);
-            statusMessage = `\nThe map is **${beatmapStatusName}**. Teto will remember this score.`;
+            statusMessage = `\nThe map is **${beatmapStatusName}**. ${await formatTetoText('Teto will remember this score.')}`;
           }
         } catch (error) {
           console.error('Error saving local score:', error);
@@ -1265,8 +1309,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await dbServerConfig.setChannel(guildId, channelType, channel.id);
     
     const channelTypeName = channelType === 'tmotd' ? 'TMOTD' : 'Challenges';
+    const message = await formatTetoText(`Teto configured! ${channelTypeName} channel set to <#${channel.id}>.`);
     return interaction.reply({ 
-      content: `Teto configured! ${channelTypeName} channel set to <#${channel.id}>.`, 
+      content: message, 
       ephemeral: true 
     });
   }
@@ -1523,9 +1568,10 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       if (matcher) {
         uid = matcher[1];
       }
-      const newText = uid
+      const baseText = uid
         ? `<@${uid}> map of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`
         : `This map of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`;
+      const newText = await formatTetoText(baseText);
       try {
         await msg.edit(newText);
       } catch (err) {
@@ -1709,7 +1755,7 @@ async function generateWeeklyUpdate(guildId) {
 
     // Build final message with separators
     const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-    const header = '**TETO WEEKLY UPDATE!**\n\n';
+    const header = await formatTetoText('**TETO WEEKLY UPDATE!**\n\n');
     const content = sections.join('\n');
     
     // Discord message limit is 2000 characters
