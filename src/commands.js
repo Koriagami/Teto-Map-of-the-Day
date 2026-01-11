@@ -36,6 +36,11 @@ const mapSubmit = new SlashCommandBuilder()
       .setName('get_c_report')
       .setDescription('Generate and post the weekly challenges report (admin only)')
   )
+  .addSubcommand(sub =>
+    sub
+      .setName('help')
+      .setDescription('Show all available commands and their descriptions')
+  )
   .addSubcommandGroup(group => {
     const g = group
       .setName('map')

@@ -1575,6 +1575,36 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   // /teto get_c_report
+  if (sub === 'help') {
+    const helpMessage = `**Teto Bot Commands**
+
+**Map of the Day:**
+• \`/teto map submit\` - Submit your map of the day with optional recommended mods
+
+**Challenges:**
+• \`/rsc\` - Issue or respond to a score challenge
+  - Use without parameters to issue a challenge with your most recent score
+  - Use with \`respond_for_map_link\` to respond to an existing challenge
+
+**Score Tracking:**
+• \`/trs\` - Record your most recent unranked/WIP score
+• \`/tc\` - Look up your scores for a map (searches last 20 messages for difficulty link)
+
+**Setup & Configuration:**
+• \`/teto setup\` - Configure bot channels (admin only)
+  - Set current channel for TMOTD or Challenges
+• \`/teto link\` - Link your Discord account to your OSU! profile
+• \`/teto get_c_report\` - Generate and post weekly challenges report (admin only)
+• \`/teto help\` - Show this help message
+
+**Note:** Most commands require linking your OSU! profile first using \`/teto link\``;
+
+    return interaction.reply({ 
+      embeds: await createEmbed(helpMessage),
+      ephemeral: true 
+    });
+  }
+
   if (sub === 'get_c_report') {
     // only admins (including server owner)
     const member = interaction.member;
