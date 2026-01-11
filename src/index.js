@@ -488,6 +488,7 @@ async function formatPlayerStats(score) {
   
   const rank = score.rank || 'N/A';
   const rankFormatted = await formatRank(rank);
+  const mods = formatMods(score);
   const pp = typeof score.pp === 'number' ? score.pp : 0;
   const accuracy = typeof score.accuracy === 'number' ? (score.accuracy * 100) : 0;
   const maxCombo = typeof score.max_combo === 'number' ? score.max_combo : 0;
@@ -497,7 +498,7 @@ async function formatPlayerStats(score) {
   const countMiss = score.statistics?.count_miss || 0;
   
   let stats = `**Score Stats:**\n`;
-  stats += `• Rank: ${rankFormatted}\n`;
+  stats += `• Rank: ${rankFormatted} | ${mods}\n`;
   stats += `• PP: **${pp.toFixed(2)}**\n`;
   stats += `• Accuracy: **${accuracy.toFixed(2)}%**\n`;
   stats += `• Max Combo: **${maxCombo.toLocaleString()}**\n`;
@@ -520,6 +521,7 @@ async function formatPlayerStatsCompact(score) {
   
   const rank = score.rank || 'N/A';
   const rankFormatted = await formatRank(rank);
+  const mods = formatMods(score);
   const pp = typeof score.pp === 'number' ? score.pp : 0;
   const accuracy = typeof score.accuracy === 'number' ? (score.accuracy * 100) : 0;
   const maxCombo = typeof score.max_combo === 'number' ? score.max_combo : 0;
@@ -528,7 +530,7 @@ async function formatPlayerStatsCompact(score) {
   const count50 = score.statistics?.count_50 || 0;
   const countMiss = score.statistics?.count_miss || 0;
   
-  return `${rankFormatted} | ${pp.toFixed(2)}pp | ${accuracy.toFixed(2)}% | ${maxCombo.toLocaleString()}x | ${scoreValue.toLocaleString()} | ${count300}/${count100}/${count50}/${countMiss}`;
+  return `${rankFormatted} | ${mods} | ${pp.toFixed(2)}pp | ${accuracy.toFixed(2)}% | ${maxCombo.toLocaleString()}x | ${scoreValue.toLocaleString()} | ${count300}/${count100}/${count50}/${countMiss}`;
 }
 
 // Helper: get beatmap status name from status number
