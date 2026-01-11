@@ -497,13 +497,46 @@ async function formatPlayerStats(score) {
   const count50 = score.statistics?.count_50 || 0;
   const countMiss = score.statistics?.count_miss || 0;
   
+  // Get map stats (CS, AR, BPM, OD, HP) from beatmap
+  let cs = score.beatmap?.cs || score.beatmap?.circle_size || null;
+  let ar = score.beatmap?.ar || score.beatmap?.approach_rate || null;
+  let bpm = score.beatmap?.bpm || score.beatmap?.bpm || null;
+  let od = score.beatmap?.accuracy || score.beatmap?.overall_difficulty || null;
+  let hp = score.beatmap?.drain || score.beatmap?.hp || score.beatmap?.health || null;
+  
+  // If map stats are not in score object, try to fetch beatmap
+  if ((cs === null || ar === null || bpm === null || od === null || hp === null) && score.beatmap?.id) {
+    try {
+      const beatmap = await getBeatmap(score.beatmap.id);
+      cs = cs ?? beatmap?.cs ?? beatmap?.circle_size ?? null;
+      ar = ar ?? beatmap?.ar ?? beatmap?.approach_rate ?? null;
+      bpm = bpm ?? beatmap?.bpm ?? null;
+      od = od ?? beatmap?.accuracy ?? beatmap?.overall_difficulty ?? null;
+      hp = hp ?? beatmap?.drain ?? beatmap?.hp ?? beatmap?.health ?? null;
+    } catch (error) {
+      console.error('Error fetching beatmap for map stats:', error);
+    }
+  }
+  
   let stats = `**Score Stats:**\n`;
   stats += `• Rank: ${rankFormatted} | ${mods}\n`;
   stats += `• PP: **${pp.toFixed(2)}**\n`;
   stats += `• Accuracy: **${accuracy.toFixed(2)}%**\n`;
   stats += `• Max Combo: **${maxCombo.toLocaleString()}**\n`;
   stats += `• Score: **${scoreValue.toLocaleString()}**\n`;
-  stats += `• Hits: **${count300}**/${count100}/${count50}/**${countMiss}**\n\n`;
+  stats += `• Hits: **${count300}**/${count100}/${count50}/**${countMiss}**\n`;
+  
+  // Add Map Stats line if we have the data
+  if (cs !== null || ar !== null || bpm !== null || od !== null || hp !== null) {
+    const csValue = cs !== null ? cs.toFixed(1) : 'N/A';
+    const arValue = ar !== null ? ar.toFixed(1) : 'N/A';
+    const bpmValue = bpm !== null ? Math.round(bpm).toString() : 'N/A';
+    const odValue = od !== null ? od.toFixed(1) : 'N/A';
+    const hpValue = hp !== null ? hp.toFixed(1) : 'N/A';
+    stats += `• Map Stats: :cs: **${csValue}** | :ar: **${arValue}** | :bpm: **${bpmValue}** | :od: **${odValue}** | :hp: **${hpValue}**\n`;
+  }
+  
+  stats += '\n';
   
   return stats;
 }
