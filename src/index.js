@@ -1013,11 +1013,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
 
-      // Get beatmapset image URL for the embed (use challengerScore as it has the beatmap info)
-      const imageUrl = await getBeatmapsetImageUrl(challengerScore);
-
-      // Post comparison results to Challenges channel
-      await opChannel.send({ embeds: await createEmbed(responseMessage, imageUrl) });
+      // Post comparison results to Challenges channel (use standard message, not embed)
+      await opChannel.send({ content: responseMessage });
 
       // Send confirmation to user
       return interaction.editReply({ 
