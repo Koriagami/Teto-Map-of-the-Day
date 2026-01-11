@@ -1645,22 +1645,46 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const opChannel = opChannelResult.channel;
     const opChannelId = opChannelResult.channelId;
 
-    let msgContent = `<@${interaction.user.id}> map of the day is - ${mapLink}`;
-    if (mods.length > 0) {
-      msgContent += `\nRecommended mods: ${mods.join(', ')}`;
-    }
-
-    // Get beatmapset image URL for the embed
+    // Get beatmap data to format message with map name and difficulty
+    let mapName = null;
+    let difficultyName = null;
+    let difficultyLink = mapLink; // Fallback to original link if we can't get beatmap data
     let imageUrl = null;
+    
     try {
       const beatmapId = extractBeatmapId(mapLink);
       if (beatmapId) {
         const beatmap = await getBeatmap(beatmapId);
+        mapName = beatmap?.beatmapset?.title || beatmap?.beatmapset?.title_unicode || null;
+        difficultyName = beatmap?.version || null;
         imageUrl = await getBeatmapsetImageUrl(beatmap);
+        
+        // Construct difficulty link
+        const beatmapsetId = beatmap?.beatmapset_id || beatmap?.beatmapset?.id;
+        if (beatmapsetId && beatmapId) {
+          difficultyLink = `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${beatmapId}`;
+        } else if (beatmapId) {
+          difficultyLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
+        }
       }
     } catch (error) {
-      console.error('Error getting beatmapset image for map of the day:', error);
-      // Continue without image if there's an error
+      console.error('Error getting beatmap data for map of the day:', error);
+      // Continue with fallback link if there's an error
+    }
+
+    // Format message with map name and difficulty as link
+    let difficultyLabel = null;
+    if (mapName && difficultyName) {
+      difficultyLabel = `[${mapName} [${difficultyName}]](${difficultyLink})`;
+    } else if (difficultyName) {
+      difficultyLabel = `[Unknown Map [${difficultyName}]](${difficultyLink})`;
+    } else {
+      difficultyLabel = difficultyLink; // Fallback to plain link
+    }
+
+    let msgContent = `<@${interaction.user.id}> map of the day is - ${difficultyLabel}`;
+    if (mods.length > 0) {
+      msgContent += `\nRecommended mods: ${mods.join(', ')}`;
     }
 
     try {
@@ -1715,8 +1739,11 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       if (matcher) {
         uid = matcher[1];
       }
-      // Extract difficulty name from the original message
+      // Extract beatmap data from the original message to get map name and difficulty
+      let mapName = null;
       let difficultyName = null;
+      let difficultyLink = null;
+      
       try {
         // Extract osu.ppy.sh link from original message content
         const linkMatch = msg.content.match(/https?:\/\/osu\.ppy\.sh\/[^\s\)]+/);
@@ -1725,20 +1752,38 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
           const beatmapId = extractBeatmapId(mapLink);
           if (beatmapId) {
             const beatmap = await getBeatmap(beatmapId);
-            // Get difficulty name from beatmap.version
+            mapName = beatmap?.beatmapset?.title || beatmap?.beatmapset?.title_unicode || null;
             difficultyName = beatmap?.version || null;
+            
+            // Construct difficulty link
+            const beatmapsetId = beatmap?.beatmapset_id || beatmap?.beatmapset?.id;
+            if (beatmapsetId && beatmapId) {
+              difficultyLink = `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${beatmapId}`;
+            } else if (beatmapId) {
+              difficultyLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
+            }
           }
         }
       } catch (error) {
-        console.error('Error extracting difficulty name for edited message:', error);
-        // Continue without difficulty name if there's an error
+        console.error('Error extracting beatmap data for edited message:', error);
+        // Continue without map/difficulty info if there's an error
       }
       
-      // Format message with difficulty name after "map" (if available)
-      const difficultyText = difficultyName ? ` [${difficultyName}]` : '';
+      // Format message with map name and difficulty as link in parentheses
+      let difficultyLabel = null;
+      if (mapName && difficultyName && difficultyLink) {
+        difficultyLabel = `([${mapName} [${difficultyName}]](${difficultyLink}))`;
+      } else if (difficultyName && difficultyLink) {
+        difficultyLabel = `([Unknown Map [${difficultyName}]](${difficultyLink}))`;
+      } else if (difficultyLink) {
+        difficultyLabel = `(${difficultyLink})`;
+      } else {
+        difficultyLabel = '';
+      }
+      
       const baseText = uid
-        ? `<@${uid}> map${difficultyText} of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`
-        : `This map${difficultyText} of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`;
+        ? `<@${uid}> map of the day ${difficultyLabel} is voted to be meh... Teto is disappointed 😑\nBring something better next time!`
+        : `This map of the day ${difficultyLabel} is voted to be meh... Teto is disappointed 😑\nBring something better next time!`;
       const newText = await formatTetoText(baseText);
       
       // Don't include image when message is downvoted
