@@ -1650,8 +1650,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
       msgContent += `\nRecommended mods: ${mods.join(', ')}`;
     }
 
+    // Get beatmapset image URL for the embed
+    let imageUrl = null;
     try {
-      const sent = await opChannel.send({ embeds: await createEmbed(msgContent) });
+      const beatmapId = extractBeatmapId(mapLink);
+      if (beatmapId) {
+        const beatmap = await getBeatmap(beatmapId);
+        imageUrl = await getBeatmapsetImageUrl(beatmap);
+      }
+    } catch (error) {
+      console.error('Error getting beatmapset image for map of the day:', error);
+      // Continue without image if there's an error
+    }
+
+    try {
+      const sent = await opChannel.send({ embeds: await createEmbed(msgContent, imageUrl) });
       // bot adds its own reactions (non-critical if this fails)
       try {
         await sent.react('👍');
@@ -1702,12 +1715,35 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       if (matcher) {
         uid = matcher[1];
       }
-      const baseText = uid
-        ? `<@${uid}> map of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`
-        : `This map of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`;
-      const newText = await formatTetoText(baseText);
+      // Extract difficulty name from the original message
+      let difficultyName = null;
       try {
-        await msg.edit({ embeds: await createEmbed(newText) });
+        // Extract osu.ppy.sh link from original message content
+        const linkMatch = msg.content.match(/https?:\/\/osu\.ppy\.sh\/[^\s\)]+/);
+        if (linkMatch) {
+          const mapLink = linkMatch[0];
+          const beatmapId = extractBeatmapId(mapLink);
+          if (beatmapId) {
+            const beatmap = await getBeatmap(beatmapId);
+            // Get difficulty name from beatmap.version
+            difficultyName = beatmap?.version || null;
+          }
+        }
+      } catch (error) {
+        console.error('Error extracting difficulty name for edited message:', error);
+        // Continue without difficulty name if there's an error
+      }
+      
+      // Format message with difficulty name after "map" (if available)
+      const difficultyText = difficultyName ? ` [${difficultyName}]` : '';
+      const baseText = uid
+        ? `<@${uid}> map${difficultyText} of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`
+        : `This map${difficultyText} of the day is voted to be meh... Teto is disappointed 😑\nBring something better next time!`;
+      const newText = await formatTetoText(baseText);
+      
+      // Don't include image when message is downvoted
+      try {
+        await msg.edit({ embeds: await createEmbed(newText, null) });
       } catch (err) {
         console.error('Failed to edit message on meh vote:', err);
       }
