@@ -1667,7 +1667,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
-  // /teto get_c_report
+  // /teto help
   if (sub === 'help') {
     const helpMessage = `**Teto Bot Commands**
 
@@ -1676,8 +1676,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 **Challenges:**
 • \`/rsc\` - Issue or respond to a score challenge
-  - Use without parameters to issue a challenge with your most recent score
-  - Use with \`respond_for_map_link\` to respond to an existing challenge
+  - Without link: Uses your most recent score to issue/respond to a challenge
+  - With link: Fetches your top score for the beatmap (falls back to most recent if needed) to issue/respond
+  - If no challenge exists for the difficulty, a new challenge will be created
 
 **Score Tracking:**
 • \`/trs\` - Record your most recent unranked/WIP score
