@@ -274,14 +274,14 @@ async function getOperatingChannel(guildId, guild, channelType) {
 
 // Helper: format mods from score object
 function formatMods(score) {
-  if (!score || typeof score !== 'object') return 'None';
+  if (!score || typeof score !== 'object') return 'No mods';
   
   // Try to get mods from score.mods (array of objects with acronym property)
   if (Array.isArray(score.mods) && score.mods.length > 0) {
     const modAcronyms = score.mods
       .map(mod => (typeof mod === 'object' && mod.acronym) ? mod.acronym : (typeof mod === 'string' ? mod : null))
       .filter(Boolean);
-    return modAcronyms.length > 0 ? modAcronyms.join(', ') : 'None';
+    return modAcronyms.length > 0 ? modAcronyms.join(', ') : 'No mods';
   }
   
   // Try to get mods as a string
@@ -294,7 +294,7 @@ function formatMods(score) {
     return score.mods;
   }
   
-  return 'None';
+  return 'No mods';
 }
 
 // Helper: compare two scores and format comparison table
