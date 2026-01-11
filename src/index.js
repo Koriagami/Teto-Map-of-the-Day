@@ -1740,15 +1740,34 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
         uid = matcher[1];
       }
       // Extract beatmap data from the original message to get map name and difficulty
+      // Check both message content and embed description (since messages are sent as embeds)
       let mapName = null;
       let difficultyName = null;
       let difficultyLink = null;
       
       try {
-        // Extract osu.ppy.sh link from original message content
-        const linkMatch = msg.content.match(/https?:\/\/osu\.ppy\.sh\/[^\s\)]+/);
-        if (linkMatch) {
-          const mapLink = linkMatch[0];
+        // Get text from message content or embed description
+        let messageText = msg.content || '';
+        if (msg.embeds && msg.embeds.length > 0 && msg.embeds[0].description) {
+          messageText += ' ' + msg.embeds[0].description;
+        }
+        
+        // Extract osu.ppy.sh link from message text (could be markdown link or plain link)
+        let mapLink = null;
+        
+        // Try to extract markdown link first: [text](url)
+        const markdownLinkMatch = messageText.match(/\[([^\]]+)\]\((https?:\/\/osu\.ppy\.sh\/[^\)]+)\)/);
+        if (markdownLinkMatch) {
+          mapLink = markdownLinkMatch[2];
+        } else {
+          // Try plain link
+          const plainLinkMatch = messageText.match(/https?:\/\/osu\.ppy\.sh\/[^\s\)]+/);
+          if (plainLinkMatch) {
+            mapLink = plainLinkMatch[0];
+          }
+        }
+        
+        if (mapLink) {
           const beatmapId = extractBeatmapId(mapLink);
           if (beatmapId) {
             const beatmap = await getBeatmap(beatmapId);
@@ -1770,17 +1789,16 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       }
       
       // Format message with map name and difficulty as link in parentheses
-      let difficultyLabel = null;
+      let difficultyLabel = '';
       if (mapName && difficultyName && difficultyLink) {
         difficultyLabel = `([${mapName} [${difficultyName}]](${difficultyLink}))`;
       } else if (difficultyName && difficultyLink) {
         difficultyLabel = `([Unknown Map [${difficultyName}]](${difficultyLink}))`;
       } else if (difficultyLink) {
         difficultyLabel = `(${difficultyLink})`;
-      } else {
-        difficultyLabel = '';
       }
       
+      // Format message - use user mention if available, otherwise use generic format
       const baseText = uid
         ? `<@${uid}> map of the day ${difficultyLabel} is voted to be meh... Teto is disappointed 😑\nBring something better next time!`
         : `This map of the day ${difficultyLabel} is voted to be meh... Teto is disappointed 😑\nBring something better next time!`;
