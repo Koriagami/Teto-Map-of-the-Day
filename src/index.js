@@ -1200,11 +1200,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // Fetch last 20 messages from the channel
       const messages = await channel.messages.fetch({ limit: 20 });
       
-      // Search for difficulty link in messages
+      // Search for difficulty link in messages (check both content and embed description)
       let beatmapInfo = null;
       for (const [messageId, message] of messages) {
-        const content = message.content;
-        beatmapInfo = extractBeatmapInfoFromMessage(content);
+        // Get text from message content or embed description (since messages are sent as embeds)
+        let messageText = message.content || '';
+        if (message.embeds && message.embeds.length > 0 && message.embeds[0].description) {
+          messageText = (messageText + ' ' + message.embeds[0].description).trim();
+        }
+        
+        beatmapInfo = extractBeatmapInfoFromMessage(messageText);
         if (beatmapInfo) {
           console.log(`[DEBUG /tc] Found beatmap info:`, beatmapInfo);
           break;
