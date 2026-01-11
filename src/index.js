@@ -272,6 +272,31 @@ async function getOperatingChannel(guildId, guild, channelType) {
   }
 }
 
+// Helper: format mods from score object
+function formatMods(score) {
+  if (!score || typeof score !== 'object') return 'None';
+  
+  // Try to get mods from score.mods (array of objects with acronym property)
+  if (Array.isArray(score.mods) && score.mods.length > 0) {
+    const modAcronyms = score.mods
+      .map(mod => (typeof mod === 'object' && mod.acronym) ? mod.acronym : (typeof mod === 'string' ? mod : null))
+      .filter(Boolean);
+    return modAcronyms.length > 0 ? modAcronyms.join(', ') : 'None';
+  }
+  
+  // Try to get mods as a string
+  if (typeof score.mods_string === 'string' && score.mods_string.length > 0) {
+    return score.mods_string;
+  }
+  
+  // Try legacy format
+  if (typeof score.mods === 'string' && score.mods.length > 0) {
+    return score.mods;
+  }
+  
+  return 'None';
+}
+
 // Helper: compare two scores and format comparison table
 // Returns: { table: string, responderWins: number, challengerWins: number, totalMetrics: number }
 function compareScores(challengerScore, responderScore, responderUsername) {
@@ -301,6 +326,10 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   const responder50 = responderScore.statistics?.count_50 || 0;
   const challengerMiss = challengerScore.statistics?.count_miss || 0;
   const responderMiss = responderScore.statistics?.count_miss || 0;
+  
+  // Extract mods (for display only, not used in winner calculation)
+  const challengerMods = formatMods(challengerScore);
+  const responderMods = formatMods(responderScore);
 
   // Determine winners (only for metrics that count toward final winner)
   const ppWinner = responderPP > challengerPP ? responderName : (responderPP < challengerPP ? challengerUsername : 'Tie');
@@ -321,6 +350,10 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   table += `300s              | ${challenger300.toString().padStart(17)} | ${responder300.toString().padStart(17)}\n`;
   table += `100s              | ${challenger100.toString().padStart(17)} | ${responder100.toString().padStart(17)}\n`;
   table += `50s               | ${challenger50.toString().padStart(17)} | ${responder50.toString().padStart(17)}\n`;
+  // Truncate mods if too long (max 17 chars to fit column width)
+  const challengerModsFormatted = challengerMods.length > 17 ? challengerMods.substring(0, 14) + '...' : challengerMods;
+  const responderModsFormatted = responderMods.length > 17 ? responderMods.substring(0, 14) + '...' : responderMods;
+  table += `Mods              | ${challengerModsFormatted.padStart(17)} | ${responderModsFormatted.padStart(17)}\n`;
   table += '```\n\n';
 
   // Summary (only count metrics with winners: PP, Accuracy, Max Combo, Score, Misses)
