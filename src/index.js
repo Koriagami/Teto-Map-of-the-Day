@@ -1315,9 +1315,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
             }
           }
 
+          // Get beatmapset image URL for the embed
+          const imageUrl = await getBeatmapsetImageUrl(beatmapData || sortedScores[0]);
+
           return interaction.editReply({ 
-            content: message,
-            flags: MessageFlags.SuppressEmbeds
+            embeds: await createEmbed(message, imageUrl)
           });
         }
       } catch (error) {
@@ -1338,11 +1340,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const firstScore = sortedRecords[0].score;
         let beatmapLink = formatBeatmapLink(firstScore);
         let mapTitle = await getMapTitle(firstScore);
+        let beatmapData = null;
         
         // If we don't have a proper link or title, try fetching the beatmap
         if (!beatmapLink || mapTitle === 'Unknown Map') {
           try {
-            const beatmapData = await getBeatmap(beatmapId);
+            beatmapData = await getBeatmap(beatmapId);
             if (!mapTitle || mapTitle === 'Unknown Map') {
               mapTitle = beatmapData.beatmapset?.title || beatmapData.beatmapset?.title_unicode || 'Unknown Map';
             }
@@ -1384,9 +1387,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         }
 
+        // Get beatmapset image URL for the embed
+        const imageUrl = await getBeatmapsetImageUrl(beatmapData || firstScore);
+
         return interaction.editReply({ 
-          content: message,
-          flags: MessageFlags.SuppressEmbeds
+          embeds: await createEmbed(message, imageUrl)
         });
       }
 
