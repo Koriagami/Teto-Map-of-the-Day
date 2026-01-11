@@ -1371,7 +1371,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
         // Build message with all local scores
-        let message = `Your scores on ${difficultyLink} (from local storage):\n\n`;
+        const storageText = await formatTetoText('(from Teto memories):');
+        let message = `Your scores on ${difficultyLink} ${storageText}\n\n`;
         
         for (let i = 0; i < sortedRecords.length; i++) {
           const record = sortedRecords[i];
