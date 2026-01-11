@@ -1733,24 +1733,27 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
     const users = await reaction.users.fetch();
     const count = users.size;
     if (count >= 4) {
-      // try to extract original submitter id from message start
-      const matcher = msg.content.match(/^<@!?(\d+)>/);
+      // Extract original submitter id from message - check both content and embed description
       let uid = null;
+      
+      // Get text from message content or embed description
+      let messageText = msg.content || '';
+      if (msg.embeds && msg.embeds.length > 0 && msg.embeds[0].description) {
+        messageText = (messageText + ' ' + msg.embeds[0].description).trim();
+      }
+      
+      // Try to extract user ID from the beginning of the message text
+      const matcher = messageText.match(/^<@!?(\d+)>/);
       if (matcher) {
         uid = matcher[1];
       }
+      
       // Extract beatmap data from the original message to get map name and difficulty
-      // Check both message content and embed description (since messages are sent as embeds)
       let mapName = null;
       let difficultyName = null;
       let difficultyLink = null;
       
       try {
-        // Get text from message content or embed description
-        let messageText = msg.content || '';
-        if (msg.embeds && msg.embeds.length > 0 && msg.embeds[0].description) {
-          messageText += ' ' + msg.embeds[0].description;
-        }
         
         // Extract osu.ppy.sh link from message text (could be markdown link or plain link)
         let mapLink = null;
