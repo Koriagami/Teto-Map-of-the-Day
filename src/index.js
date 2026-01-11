@@ -1676,17 +1676,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 **Challenges:**
 • \`/rsc\` - Issue or respond to a score challenge
-  - Without link: Uses your most recent score to issue/respond to a challenge
-  - With link: Fetches your top score for the beatmap (falls back to most recent if needed) to issue/respond
-  - If no challenge exists for the difficulty, a new challenge will be created
+  Without link: Uses your most recent score to issue/respond to a challenge
+  With link: Fetches your top score for the beatmap (falls back to most recent if needed) to issue/respond
+  If no challenge exists for the difficulty, a new challenge will be created
 
 **Score Tracking:**
 • \`/trs\` - Record your most recent unranked/WIP score
 • \`/tc\` - Look up your scores for a map (searches last 20 messages for difficulty link)
 
 **Setup & Configuration:**
-• \`/teto setup\` - Configure bot channels (admin only)
-  - Set current channel for TMOTD or Challenges
+• \`/teto setup\` - Configure bot channels (admin only). Set current channel for TMOTD or Challenges
 • \`/teto link\` - Link your Discord account to your OSU! profile
 • \`/teto get_c_report\` - Generate and post weekly challenges report (admin only)
 • \`/teto help\` - Show this help message
