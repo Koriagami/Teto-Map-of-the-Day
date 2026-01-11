@@ -357,7 +357,7 @@ function formatBeatmapLink(score) {
 }
 
 // Helper: get beatmapset image URL from score object or beatmap data
-// Returns the list image URL (good size for Discord embeds)
+// Returns the card image URL (good size for Discord embeds)
 async function getBeatmapsetImageUrl(scoreOrBeatmap) {
   try {
     // Try to get beatmapset ID from score object
@@ -367,7 +367,7 @@ async function getBeatmapsetImageUrl(scoreOrBeatmap) {
     
     // If we have beatmapset ID, construct the image URL
     if (beatmapsetId) {
-      return `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/list.jpg`;
+      return `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/card.jpg`;
     }
     
     // If we have a beatmap ID but no beatmapset ID, fetch the beatmap
@@ -377,7 +377,7 @@ async function getBeatmapsetImageUrl(scoreOrBeatmap) {
         const beatmap = await getBeatmap(beatmapId);
         beatmapsetId = beatmap?.beatmapset_id || beatmap?.beatmapset?.id;
         if (beatmapsetId) {
-          return `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/list.jpg`;
+          return `https://assets.ppy.sh/beatmaps/${beatmapsetId}/covers/card.jpg`;
         }
       } catch (error) {
         console.error('Error fetching beatmap for image URL:', error);
