@@ -900,16 +900,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
 
-        // Get user's best score for this beatmap (not recent, but best)
+        // Try to get user's best/top score for this beatmap first
         userScore = await getUserBeatmapScore(beatmapId, osuUserId);
         
-        // Debug logging
+        // If best score fetch failed, fallback to most recent score
         if (!userScore) {
-          console.log(`No score found for beatmap ${beatmapId}, user ${osuUserId}`);
-          return interaction.editReply({ 
-          embeds: await createEmbed('You have no score for this beatmap. Play it first!'),
-            ephemeral: true 
-          });
+          console.log(`No best score found for beatmap ${beatmapId}, user ${osuUserId}, trying most recent score...`);
+          const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
+          const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
+          
+          if (!recentScores || recentScores.length === 0) {
+            return interaction.editReply({ 
+              embeds: await createEmbed('You have no score for this beatmap. Play it first!'),
+              ephemeral: true 
+            });
+          }
+          
+          userScore = recentScores[0];
+          
+          // Check if the recent score is for the correct beatmap
+          if (userScore.beatmap?.id?.toString() !== beatmapId) {
+            return interaction.editReply({ 
+              embeds: await createEmbed('You have no score for this beatmap. Play it first!'),
+              ephemeral: true 
+            });
+          }
         }
         
         if (!isValidScore(userScore)) {
@@ -962,25 +977,103 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
 
-      // PART B: Responding to challenge
-      // At this point, we have existingChallenge and we need to compare scores
+      // PART B: Responding to challenge OR creating new challenge if none exists
+      // If no existing challenge, create a new one using the score we have
       if (!existingChallenge) {
+        // We have userScore from PART A, use it to create a new challenge
+        if (!userScore || !isValidScore(userScore)) {
+          return interaction.editReply({ 
+            embeds: await createEmbed('No valid score found. Please try again.'),
+            ephemeral: true 
+          });
+        }
+        
+        beatmapId = userScore.beatmap.id.toString();
+        difficulty = userScore.beatmap.version;
+        
+        // Create new challenge
+        await activeChallenges.create(
+          guildId,
+          beatmapId,
+          difficulty,
+          userId,
+          osuUserId,
+          userScore
+        );
+
+        // Post challenge announcement to operational channel
+        const beatmapLink = formatBeatmapLink(userScore);
+        const playerStats = await formatPlayerStats(userScore);
+        const mapTitle = await getMapTitle(userScore);
+        const difficultyLabel = `${mapTitle} [${difficulty}]`;
+        const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
+        
+        const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
+        
+        // Get beatmapset image URL for the embed
+        const imageUrl = await getBeatmapsetImageUrl(userScore);
+        
+        await opChannel.send({ embeds: await createEmbed(challengeMessage, imageUrl) });
+
         return interaction.editReply({ 
-          embeds: await createEmbed('No active challenge found. This should not happen.'),
-          ephemeral: true 
+          embeds: await createEmbed(`Challenge issued for ${difficultyLink}!`, imageUrl)
         });
       }
 
       // Get responder's score for the challenge beatmap
-      // If we don't have it yet (responding without param), fetch it
+      // If we don't have it yet (responding without param), use most recent score
+      // If we have a link (responding with param), try best score first, then fallback to most recent
       let responderScore = userScore;
       if (!responderScore || responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
-        responderScore = await getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
-        if (!responderScore) {
-          return interaction.editReply({ 
-          embeds: await createEmbed('You have no score for this beatmap. Play it first!'),
-            ephemeral: true 
-          });
+        // If link was provided, try best score first, then fallback to most recent
+        if (respondForMapLink) {
+          // Try to get user's best/top score for this beatmap first
+          responderScore = await getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
+          
+          // If best score fetch failed, fallback to most recent score
+          if (!responderScore) {
+            console.log(`No best score found for beatmap ${existingChallenge.beatmapId}, user ${osuUserId}, trying most recent score...`);
+            const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
+            const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
+            
+            if (!recentScores || recentScores.length === 0) {
+              return interaction.editReply({ 
+                embeds: await createEmbed('You have no score for this beatmap. Play it first!'),
+                ephemeral: true 
+              });
+            }
+            
+            responderScore = recentScores[0];
+            
+            // Check if the recent score is for the correct beatmap
+            if (responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
+              return interaction.editReply({ 
+                embeds: await createEmbed('You have no score for this beatmap. Play it first!'),
+                ephemeral: true 
+              });
+            }
+          }
+        } else {
+          // No link provided - use most recent score only
+          const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
+          const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
+          
+          if (!recentScores || recentScores.length === 0) {
+            return interaction.editReply({ 
+              embeds: await createEmbed('You have no recent scores. Play a map first!'),
+              ephemeral: true 
+            });
+          }
+          
+          responderScore = recentScores[0];
+          
+          // Check if the recent score is for the correct beatmap
+          if (responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
+            return interaction.editReply({ 
+              embeds: await createEmbed('Your most recent score is not for this beatmap. Use `/rsc` with the map link to respond to this challenge.'),
+              ephemeral: true 
+            });
+          }
         }
       }
 
