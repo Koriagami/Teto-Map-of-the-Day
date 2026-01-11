@@ -131,7 +131,7 @@ async function initializeEmojis() {
   }
   
   rankEmojiCache = new Map();
-  const rankNames = ['D', 'C', 'B', 'A', 'S', 'SH', 'SS', 'SSH', 'X', 'XH'];
+  const rankNames = ['F', 'D', 'C', 'B', 'A', 'S', 'SH', 'SS', 'SSH', 'X', 'XH'];
   
   try {
     let targetGuild = null;
