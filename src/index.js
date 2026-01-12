@@ -509,9 +509,16 @@ async function getMapTitle(score) {
   return 'Unknown Map';
 }
 
-// Helper: get star rating from score/beatmap object
+// Helper: get star rating from score/beatmap object (with mod adjustments if available)
+// Note: The osu! API v2 doesn't provide mod-adjusted star ratings directly.
+// Score objects from the API typically contain the base difficulty_rating.
+// To get accurate mod-adjusted star ratings, we would need to calculate them using
+// specialized libraries (e.g., rosu-pp for Rust, peace-performance for Python).
+// For now, we display the base star rating.
 async function getStarRating(scoreOrBeatmap) {
-  // Try to get from score.beatmap first
+  // Try to get star rating from various possible locations
+  // For score objects, check score.beatmap.difficulty_rating first
+  // (Note: This is typically the base rating, not mod-adjusted)
   let starRating = scoreOrBeatmap?.beatmap?.difficulty_rating 
     || scoreOrBeatmap?.beatmap?.stars
     || scoreOrBeatmap?.difficulty_rating
@@ -527,6 +534,12 @@ async function getStarRating(scoreOrBeatmap) {
       console.error('Error fetching beatmap for star rating:', error);
     }
   }
+  
+  // TODO: To show mod-adjusted star ratings, we would need to:
+  // 1. Extract mods from the score object
+  // 2. Use a library like rosu-pp (via a Node.js binding) or call an external service
+  // 3. Calculate the mod-adjusted star rating based on the mods applied
+  // For now, we return the base star rating
   
   return starRating;
 }
