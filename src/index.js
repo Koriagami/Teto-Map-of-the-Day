@@ -37,6 +37,7 @@ const PARENT_GUILD_ID = process.env.PARENT_GUILD_ID;
 // Cache for emojis from parent guild
 let rankEmojiCache = null;
 let tetoEmoji = null;
+let mapStatsEmojiCache = null;
 
 // Bot embed color: #c6da29 (13030697 in decimal)
 const BOT_EMBED_COLOR = 0xc6da29;
@@ -126,12 +127,14 @@ async function createEmbed(content, imageUrl = null) {
 
 // Helper: find and cache emojis from parent guild
 async function initializeEmojis() {
-  if (rankEmojiCache && tetoEmoji !== null) {
-    return { rankEmojiCache, tetoEmoji };
+  if (rankEmojiCache && tetoEmoji !== null && mapStatsEmojiCache) {
+    return { rankEmojiCache, tetoEmoji, mapStatsEmojiCache };
   }
   
   rankEmojiCache = new Map();
+  mapStatsEmojiCache = new Map();
   const rankNames = ['F', 'D', 'C', 'B', 'A', 'S', 'SH', 'SS', 'SSH', 'X', 'XH'];
+  const mapStatsNames = ['cs', 'ar', 'bpm', 'od', 'hp'];
   
   try {
     let targetGuild = null;
@@ -165,6 +168,12 @@ async function initializeEmojis() {
             }
           }
           
+          // Cache map stats emojis
+          if (emojiName && mapStatsNames.includes(emojiName) && !mapStatsEmojiCache.has(emojiName)) {
+            mapStatsEmojiCache.set(emojiName, emoji);
+            console.log(`[Emoji] Found emoji for map stat ${emojiName} from guild ${guild.name}: ${emoji.name} (ID: ${emoji.id})`);
+          }
+          
           // Cache teto emoji
           if (emojiName === 'teto' && !tetoEmoji) {
             tetoEmoji = emoji;
@@ -172,7 +181,7 @@ async function initializeEmojis() {
           }
         }
         // If we found all emojis, we can stop searching
-        if (rankEmojiCache.size === rankNames.length && tetoEmoji) break;
+        if (rankEmojiCache.size === rankNames.length && tetoEmoji && mapStatsEmojiCache.size === mapStatsNames.length) break;
       } catch (error) {
         console.error(`[Emoji] Error fetching emojis from guild ${guild.name}:`, error);
         continue;
@@ -185,6 +194,12 @@ async function initializeEmojis() {
       console.warn(`[Emoji] No rank emojis found. Make sure emojis named rank_D, rank_C, etc. exist in the parent guild.`);
     }
     
+    if (mapStatsEmojiCache.size > 0) {
+      console.log(`[Emoji] Successfully cached ${mapStatsEmojiCache.size} map stats emojis`);
+    } else {
+      console.warn(`[Emoji] No map stats emojis found. Make sure emojis named cs, ar, bpm, od, hp exist in the parent guild.`);
+    }
+    
     if (tetoEmoji) {
       console.log(`[Emoji] Successfully cached teto emoji`);
     } else {
@@ -194,7 +209,7 @@ async function initializeEmojis() {
     console.error('[Emoji] Error initializing emojis:', error);
   }
   
-  return { rankEmojiCache, tetoEmoji };
+  return { rankEmojiCache, tetoEmoji, mapStatsEmojiCache };
 }
 
 // Legacy function name for backward compatibility
@@ -222,6 +237,25 @@ async function formatRank(rank) {
   
   // Fallback to emoji format (Discord will render if emoji exists in the guild)
   return `:rank_${rankUpper}:`;
+}
+
+// Helper: format map stat emoji (cs, ar, bpm, od, hp)
+async function formatMapStatEmoji(statName) {
+  const statLower = String(statName).toLowerCase();
+  
+  // Initialize emojis if not already done (lazy initialization)
+  if (!mapStatsEmojiCache) {
+    await initializeEmojis();
+  }
+  
+  // Try to use cached emoji if available
+  if (mapStatsEmojiCache && mapStatsEmojiCache.has(statLower)) {
+    const emoji = mapStatsEmojiCache.get(statLower);
+    return emoji.toString(); // Returns <:name:id> format
+  }
+  
+  // Fallback to emoji format (Discord will render if emoji exists in the guild)
+  return `:${statLower}:`;
 }
 
 // Helper: replace "Teto" with emoji + "Teto" in text
@@ -572,7 +606,12 @@ async function formatPlayerStats(score) {
     const bpmValue = bpm !== null ? Math.round(bpm).toString() : 'N/A';
     const odValue = od !== null ? od.toFixed(1) : 'N/A';
     const hpValue = hp !== null ? hp.toFixed(1) : 'N/A';
-    stats += `• Map Stats: :cs: **${csValue}** | :ar: **${arValue}** | :bpm: **${bpmValue}** | :od: **${odValue}** | :hp: **${hpValue}**\n`;
+    const csEmoji = await formatMapStatEmoji('cs');
+    const arEmoji = await formatMapStatEmoji('ar');
+    const bpmEmoji = await formatMapStatEmoji('bpm');
+    const odEmoji = await formatMapStatEmoji('od');
+    const hpEmoji = await formatMapStatEmoji('hp');
+    stats += `• Map Stats: ${csEmoji} **${csValue}** | ${arEmoji} **${arValue}** | ${bpmEmoji} **${bpmValue}** | ${odEmoji} **${odValue}** | ${hpEmoji} **${hpValue}**\n`;
   }
   
   stats += '\n';
