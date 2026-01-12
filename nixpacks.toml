@@ -6,7 +6,6 @@ providers = ["node"]
 [phases.setup]
 nixPkgs = [
   "pkgs.nodejs",
-  "pkgs.npm",
   "pkgs.python311",
   "pkgs.gcc",
   "pkgs.glibc",
