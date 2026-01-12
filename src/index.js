@@ -1709,41 +1709,51 @@ client.on(Events.InteractionCreate, async (interaction) => {
               // First score: full format
               // Enhance score object with beatmapData to ensure map stats are available
               let enhancedScore = score;
-              if (beatmapData && score.beatmap) {
+              if (beatmapData) {
                 // Extract map stats from beatmapData (osu! API v2 uses these property names)
-                const csValue = beatmapData.cs ?? beatmapData.circle_size ?? score.beatmap.cs ?? score.beatmap.circle_size ?? null;
-                const arValue = beatmapData.ar ?? beatmapData.approach_rate ?? score.beatmap.ar ?? score.beatmap.approach_rate ?? null;
-                const bpmValue = beatmapData.bpm ?? score.beatmap.bpm ?? null;
-                const odValue = beatmapData.accuracy ?? beatmapData.overall_difficulty ?? score.beatmap.accuracy ?? score.beatmap.overall_difficulty ?? null;
-                const hpValue = beatmapData.drain ?? beatmapData.hp ?? beatmapData.health ?? score.beatmap.drain ?? score.beatmap.hp ?? score.beatmap.health ?? null;
+                const csValue = beatmapData.cs ?? beatmapData.circle_size ?? null;
+                const arValue = beatmapData.ar ?? beatmapData.approach_rate ?? null;
+                const bpmValue = beatmapData.bpm ?? null;
+                const odValue = beatmapData.accuracy ?? beatmapData.overall_difficulty ?? null;
+                const hpValue = beatmapData.drain ?? beatmapData.hp ?? beatmapData.health ?? null;
+                
+                // Also check score.beatmap if it exists
+                const finalCs = csValue ?? score.beatmap?.cs ?? score.beatmap?.circle_size ?? null;
+                const finalAr = arValue ?? score.beatmap?.ar ?? score.beatmap?.approach_rate ?? null;
+                const finalBpm = bpmValue ?? score.beatmap?.bpm ?? null;
+                const finalOd = odValue ?? score.beatmap?.accuracy ?? score.beatmap?.overall_difficulty ?? null;
+                const finalHp = hpValue ?? score.beatmap?.drain ?? score.beatmap?.hp ?? score.beatmap?.health ?? null;
                 
                 console.log(`[DEBUG /tc] Map stats from beatmapData:`, {
-                  cs: csValue,
-                  ar: arValue,
-                  bpm: bpmValue,
-                  od: odValue,
-                  hp: hpValue,
+                  cs: finalCs,
+                  ar: finalAr,
+                  bpm: finalBpm,
+                  od: finalOd,
+                  hp: finalHp,
                   beatmapDataCs: beatmapData.cs,
                   beatmapDataAr: beatmapData.ar,
                   beatmapDataBpm: beatmapData.bpm,
                   beatmapDataAccuracy: beatmapData.accuracy,
-                  beatmapDataDrain: beatmapData.drain
+                  beatmapDataDrain: beatmapData.drain,
+                  hasScoreBeatmap: !!score.beatmap
                 });
                 
+                // Create or enhance beatmap object
                 enhancedScore = {
                   ...score,
                   beatmap: {
-                    ...score.beatmap,
-                    cs: csValue,
-                    ar: arValue,
-                    bpm: bpmValue,
-                    accuracy: odValue,
-                    overall_difficulty: odValue,
-                    drain: hpValue,
-                    hp: hpValue,
-                    health: hpValue,
-                    circle_size: csValue,
-                    approach_rate: arValue,
+                    ...(score.beatmap || {}),
+                    id: score.beatmap?.id ?? beatmapData.id ?? beatmapId,
+                    cs: finalCs,
+                    ar: finalAr,
+                    bpm: finalBpm,
+                    accuracy: finalOd,
+                    overall_difficulty: finalOd,
+                    drain: finalHp,
+                    hp: finalHp,
+                    health: finalHp,
+                    circle_size: finalCs,
+                    approach_rate: finalAr,
                   }
                 };
                 
@@ -1752,10 +1762,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
                   ar: enhancedScore.beatmap.ar,
                   bpm: enhancedScore.beatmap.bpm,
                   accuracy: enhancedScore.beatmap.accuracy,
-                  drain: enhancedScore.beatmap.drain
+                  drain: enhancedScore.beatmap.drain,
+                  beatmapKeys: Object.keys(enhancedScore.beatmap)
                 });
               } else {
-                console.log(`[DEBUG /tc] NOT enhancing score - beatmapData:`, !!beatmapData, `score.beatmap:`, !!score.beatmap);
+                console.log(`[DEBUG /tc] NOT enhancing score - beatmapData:`, !!beatmapData);
               }
               const playerStats = await formatPlayerStats(enhancedScore);
               console.log(`[DEBUG /tc] Player stats result length:`, playerStats.length);
