@@ -12,7 +12,7 @@ import cron from 'node-cron';
 import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect, prisma } from './db.js';
-import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty } from './test-mock-data.js';
+import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty, createMockScores } from './test-mock-data.js';
 
 const client = new Client({
   intents: [
@@ -935,14 +935,33 @@ async function testTrsCommand(interaction, guildId) {
     const starRatingText = await formatStarRating(testScore);
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
+    // Simulate beatmap status check (like real /trs)
     const statusMessage = `\n**[TEST MODE]** This map is **WIP**. ${await formatTetoText('Teto will remember this score.')}`;
     let message = `**[TEST MODE]** Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
 
-    // Add sample scores list
-    message += `\n\n**All your scores on this difficulty:**\n\n`;
-    for (let i = 1; i <= 3; i++) {
-      const compactStats = await formatPlayerStatsCompact(testScore);
-      message += `**Score #${i}**: ${compactStats}\n`;
+    // Create mock scores list (like real /trs shows "All your scores on this difficulty")
+    // In real command, this comes from API/local DB, but for test we use mock data
+    const mockScoresList = createMockScores(testScore, 3);
+    
+    if (mockScoresList.length > 0) {
+      message += `\n\n**All your scores on this difficulty:**\n\n`;
+      
+      // Get teto emoji for marking local scores
+      let tetoEmojiString = ':teto:';
+      if (tetoEmoji == null) {
+        await initializeEmojis();
+      }
+      if (tetoEmoji) {
+        tetoEmojiString = tetoEmoji.toString();
+      }
+      
+      for (let i = 0; i < mockScoresList.length; i++) {
+        const score = mockScoresList[i];
+        const compactStats = await formatPlayerStatsCompact(score);
+        // Mark first score as local (since it's from test data)
+        const tetoMarker = i === 0 ? ` ${tetoEmojiString}` : '';
+        message += `**Score #${i + 1}**${tetoMarker}: ${compactStats}\n`;
+      }
     }
 
     const imageUrl = await getBeatmapsetImageUrl(testScore);
@@ -964,33 +983,46 @@ async function testTcCommand(interaction, guildId) {
       orderBy: { createdAt: 'desc' }
     });
 
-    let testScore;
+    let baseScore;
     if (localScoreRecords.length > 0) {
-      testScore = localScoreRecords[0].score;
+      baseScore = localScoreRecords[0].score;
     } else {
-      testScore = mockScoreSingleMod;
+      baseScore = mockScoreSingleMod;
     }
 
-    const beatmapLink = formatBeatmapLink(testScore);
-    const mapTitle = await getMapTitle(testScore);
-    const difficulty = testScore.beatmap?.version || defaultDifficulty;
+    // Create multiple scores with varying stats (like real /tc command)
+    const testScores = createMockScores(baseScore, 3);
+
+    const beatmapLink = formatBeatmapLink(testScores[0]);
+    const mapTitle = await getMapTitle(testScores[0]);
+    const difficulty = testScores[0].beatmap?.version || defaultDifficulty;
     const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
-    const starRatingText = await formatStarRating(testScore);
+    const starRatingText = await formatStarRating(testScores[0]);
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
     let message = `**[TEST MODE]** Your scores on ${difficultyLink}:\n\n`;
 
-    // First score: full format
-    const playerStats = await formatPlayerStats(testScore);
+    // First score: full format (enhance with beatmap data if needed)
+    let enhancedScore = testScores[0];
+    if (baseScore.beatmap && !enhancedScore.beatmap.cs) {
+      enhancedScore = {
+        ...enhancedScore,
+        beatmap: {
+          ...enhancedScore.beatmap,
+          ...baseScore.beatmap
+        }
+      };
+    }
+    const playerStats = await formatPlayerStats(enhancedScore);
     message += `**Score #1**\n${playerStats}`;
 
     // Subsequent scores: compact format
-    for (let i = 2; i <= 3; i++) {
-      const compactStats = await formatPlayerStatsCompact(testScore);
-      message += `**Score #${i}**: ${compactStats}\n`;
+    for (let i = 1; i < testScores.length; i++) {
+      const compactStats = await formatPlayerStatsCompact(testScores[i]);
+      message += `**Score #${i + 1}**: ${compactStats}\n`;
     }
 
-    const imageUrl = await getBeatmapsetImageUrl(testScore);
+    const imageUrl = await getBeatmapsetImageUrl(testScores[0]);
     return interaction.editReply({ 
       embeds: await createEmbed(message, imageUrl)
     });

@@ -64,6 +64,28 @@ export const mockScoreSingleMod = {
   }
 };
 
+// Helper: create multiple mock scores with varying stats (for tc command)
+export function createMockScores(baseScore, count = 3) {
+  const scores = [];
+  for (let i = 0; i < count; i++) {
+    scores.push({
+      ...baseScore,
+      score: baseScore.score - (i * 50000), // Decreasing scores
+      pp: baseScore.pp - (i * 5), // Decreasing PP
+      accuracy: baseScore.accuracy - (i * 0.02), // Decreasing accuracy
+      max_combo: baseScore.max_combo - (i * 20), // Decreasing combo
+      rank: i === 0 ? 'A' : i === 1 ? 'B' : 'C', // Different ranks
+      statistics: {
+        count_300: baseScore.statistics.count_300 - (i * 10),
+        count_100: baseScore.statistics.count_100 + (i * 5),
+        count_50: baseScore.statistics.count_50 + (i * 2),
+        count_miss: baseScore.statistics.count_miss + (i * 1)
+      }
+    });
+  }
+  return scores;
+}
+
 // Mock challenger score (used for rscr command)
 export const mockChallengerScore = {
   score: 1234567,
