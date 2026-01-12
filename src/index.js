@@ -1077,28 +1077,33 @@ async function testRscRespondCommand(interaction, guildId) {
     const { responderWins } = comparisonResult;
     const responderWon = responderWins >= 3;
 
-    // Get Discord user avatars for stat card
+    // Get Discord user avatars for stat card with timeout
     let challengerAvatarUrl = null;
     let responderAvatarUrl = null;
     try {
       // For test, use interaction user as challenger if we have a challenge, otherwise use a placeholder
       if (challenges.length > 0) {
         const challengerUserId = challenges[0].challengerUserId;
-        const challengerUser = await client.users.fetch(challengerUserId).catch(() => null);
+        // Fetch with timeout (5 seconds)
+        const challengerFetchPromise = client.users.fetch(challengerUserId);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('User fetch timeout')), 5000)
+        );
+        const challengerUser = await Promise.race([challengerFetchPromise, timeoutPromise]).catch(() => null);
         if (challengerUser) {
           challengerAvatarUrl = challengerUser.displayAvatarURL({ extension: 'png', size: 256 });
         }
       }
       responderAvatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
     } catch (error) {
-      console.error('Error fetching user avatars in test command:', error);
+      console.warn('Error fetching user avatars in test command (non-critical):', error.message);
     }
 
     // Get usernames
     const challengerUsername = challengerScore.user?.username || 'ChallengerUser';
     const responderUsername = interaction.user.username;
 
-    // Generate stat card image
+    // Generate stat card image with error handling
     let statCardAttachment = null;
     try {
       statCardAttachment = await generateChallengeStatCard(
@@ -1113,7 +1118,11 @@ async function testRscRespondCommand(interaction, guildId) {
         responderWon
       );
     } catch (error) {
-      console.error('Error generating stat card in test command:', error);
+      console.error('Error generating stat card in test command (falling back to text table):', error.message);
+      // Check if it's a canvas dependency issue
+      if (error.message.includes('canvas') || error.message.includes('Cairo') || error.message.includes('Pango')) {
+        console.error('Canvas system dependencies may be missing. Ensure Cairo and Pango are installed on the server.');
+      }
     }
 
     const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
@@ -1548,17 +1557,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
 
-      // Get Discord user avatars for stat card
+      // Get Discord user avatars for stat card with timeout
       let challengerAvatarUrl = null;
       let responderAvatarUrl = null;
       try {
-        const challengerUser = await client.users.fetch(existingChallenge.challengerUserId).catch(() => null);
+        // Fetch challenger user with timeout (5 seconds)
+        const challengerFetchPromise = client.users.fetch(existingChallenge.challengerUserId);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('User fetch timeout')), 5000)
+        );
+        
+        const challengerUser = await Promise.race([challengerFetchPromise, timeoutPromise]).catch(() => null);
         if (challengerUser) {
           challengerAvatarUrl = challengerUser.displayAvatarURL({ extension: 'png', size: 256 });
         }
         responderAvatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
       } catch (error) {
-        console.error('Error fetching user avatars:', error);
+        console.warn('Error fetching user avatars (non-critical, using placeholders):', error.message);
         // Continue without avatars - stat card will use placeholders
       }
 
@@ -1566,7 +1581,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const challengerUsername = challengerScore.user?.username || 'Challenger';
       const responderUsername = interaction.user.username;
 
-      // Generate stat card image
+      // Generate stat card image with error handling
       let statCardAttachment = null;
       try {
         statCardAttachment = await generateChallengeStatCard(
@@ -1581,7 +1596,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
           responderWon
         );
       } catch (error) {
-        console.error('Error generating stat card:', error);
+        console.error('Error generating stat card (falling back to text table):', error.message);
+        // Check if it's a canvas dependency issue
+        if (error.message.includes('canvas') || error.message.includes('Cairo') || error.message.includes('Pango')) {
+          console.error('Canvas system dependencies may be missing. Ensure Cairo and Pango are installed on the server.');
+        }
         // Fall back to text table if image generation fails
       }
 

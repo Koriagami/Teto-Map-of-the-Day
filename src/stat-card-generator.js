@@ -1,6 +1,22 @@
 import { createCanvas, loadImage } from 'canvas';
 import { AttachmentBuilder } from 'discord.js';
 
+/**
+ * Check if canvas is available (system dependencies installed)
+ * @returns {boolean} True if canvas is available
+ */
+function checkCanvasAvailability() {
+  try {
+    const testCanvas = createCanvas(1, 1);
+    testCanvas.getContext('2d');
+    return true;
+  } catch (error) {
+    console.error('Canvas is not available:', error.message);
+    console.error('Ensure canvas system dependencies (Cairo, Pango, libpng, jpeg, giflib, librsvg) are installed.');
+    return false;
+  }
+}
+
 // Colors
 const COLORS = {
   background: '#000000',
@@ -14,6 +30,11 @@ const COLORS = {
 // Canvas dimensions
 const CANVAS_WIDTH = 1200;
 const CANVAS_HEIGHT = 800;
+
+// Timeout and retry settings
+const AVATAR_LOAD_TIMEOUT = 5000; // 5 seconds
+const AVATAR_MAX_RETRIES = 2;
+const IMAGE_QUALITY = 0.85; // JPEG quality (0-1), balance between size and quality
 
 // Layout constants
 const AVATAR_SIZE = 80;
@@ -31,6 +52,46 @@ const BAR_HEIGHT = 20;
 const BAR_Y_OFFSET = 25;
 
 /**
+ * Timeout wrapper for async operations
+ * @param {Promise} promise - Promise to wrap
+ * @param {number} timeoutMs - Timeout in milliseconds
+ * @param {string} errorMessage - Error message if timeout
+ * @returns {Promise} Promise that rejects on timeout
+ */
+function withTimeout(promise, timeoutMs, errorMessage = 'Operation timed out') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    )
+  ]);
+}
+
+/**
+ * Load image with timeout and retry logic
+ * @param {string} url - Image URL
+ * @param {number} retries - Number of retries remaining
+ * @returns {Promise} Loaded image
+ */
+async function loadImageWithTimeout(url, retries = AVATAR_MAX_RETRIES) {
+  try {
+    return await withTimeout(
+      loadImage(url),
+      AVATAR_LOAD_TIMEOUT,
+      `Avatar load timeout after ${AVATAR_LOAD_TIMEOUT}ms`
+    );
+  } catch (error) {
+    if (retries > 0) {
+      console.warn(`Avatar load failed, retrying (${retries} retries left):`, error.message);
+      // Wait a bit before retry
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return loadImageWithTimeout(url, retries - 1);
+    }
+    throw error;
+  }
+}
+
+/**
  * Generate a stat card image comparing two players' scores
  * @param {Object} challengerScore - Score object from osu! API
  * @param {Object} responderScore - Score object from osu! API
@@ -42,6 +103,7 @@ const BAR_Y_OFFSET = 25;
  * @param {string} responderAvatarUrl - Discord avatar URL for responder
  * @param {boolean} responderWon - Whether responder won the challenge
  * @returns {Promise<AttachmentBuilder>} Discord attachment with the stat card image
+ * @throws {Error} If canvas operations fail
  */
 export async function generateChallengeStatCard(
   challengerScore,
@@ -54,28 +116,73 @@ export async function generateChallengeStatCard(
   responderAvatarUrl,
   responderWon
 ) {
-  const canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
-  const ctx = canvas.getContext('2d');
+  // Check if canvas is available
+  if (!checkCanvasAvailability()) {
+    throw new Error('Canvas is not available. Ensure canvas system dependencies (Cairo, Pango, libpng, jpeg, giflib, librsvg) are installed on the server.');
+  }
+  
+  let canvas;
+  let ctx;
+  
+  try {
+    // Validate inputs
+    if (!challengerScore || !responderScore) {
+      throw new Error('Invalid score data: challengerScore and responderScore are required');
+    }
+    
+    // Create canvas with error handling
+    try {
+      canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx = canvas.getContext('2d');
+    } catch (error) {
+      throw new Error(`Failed to create canvas: ${error.message}. Ensure canvas system dependencies (Cairo, Pango) are installed.`);
+    }
 
-  // 1. Draw black background
-  ctx.fillStyle = COLORS.background;
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    // 1. Draw black background
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  // 2. Draw vertical dividers
-  drawDividers(ctx);
+    // 2. Draw vertical dividers
+    drawDividers(ctx);
 
-  // 3. Draw header (profile pictures + map name)
-  await drawHeader(ctx, challengerAvatarUrl, responderAvatarUrl, mapName, difficulty, responderWon);
+    // 3. Draw header (profile pictures + map name) with error handling
+    try {
+      await drawHeader(ctx, challengerAvatarUrl, responderAvatarUrl, mapName, difficulty, responderWon);
+    } catch (error) {
+      console.error('Error drawing header:', error);
+      // Continue with placeholder avatars
+    }
 
-  // 4. Extract and prepare stats
-  const stats = extractStats(challengerScore, responderScore);
+    // 4. Extract and prepare stats
+    const stats = extractStats(challengerScore, responderScore);
 
-  // 5. Draw stat comparison table
-  drawStatTable(ctx, stats, challengerUsername, responderUsername, responderWon);
+    // 5. Draw stat comparison table
+    try {
+      drawStatTable(ctx, stats, challengerUsername, responderUsername, responderWon);
+    } catch (error) {
+      console.error('Error drawing stat table:', error);
+      throw new Error(`Failed to draw stat table: ${error.message}`);
+    }
 
-  // 6. Export to buffer and create attachment
-  const buffer = canvas.toBuffer('image/png');
-  return new AttachmentBuilder(buffer, { name: 'challenge-stats.png' });
+    // 6. Export to buffer with optimization
+    let buffer;
+    try {
+      // Use JPEG for smaller file size, fallback to PNG if JPEG fails
+      try {
+        buffer = canvas.toBuffer('image/jpeg', { quality: IMAGE_QUALITY });
+        return new AttachmentBuilder(buffer, { name: 'challenge-stats.jpg' });
+      } catch (jpegError) {
+        console.warn('JPEG export failed, falling back to PNG:', jpegError.message);
+        buffer = canvas.toBuffer('image/png');
+        return new AttachmentBuilder(buffer, { name: 'challenge-stats.png' });
+      }
+    } catch (error) {
+      throw new Error(`Failed to export canvas to image: ${error.message}`);
+    }
+  } catch (error) {
+    console.error('Error in generateChallengeStatCard:', error);
+    throw error;
+  }
 }
 
 /**
@@ -103,34 +210,44 @@ function drawDividers(ctx) {
  * Draw header section with profile pictures, map name, and crown
  */
 async function drawHeader(ctx, avatar1Url, avatar2Url, mapName, difficulty, responderWon) {
-  // Draw challenger avatar (left)
+  // Draw challenger avatar (left) with timeout handling
   if (avatar1Url) {
     try {
-      const avatar1 = await loadImage(avatar1Url);
+      const avatar1 = await loadImageWithTimeout(avatar1Url);
       drawCircularImage(ctx, avatar1, AVATAR_LEFT_X, AVATAR_Y, AVATAR_SIZE);
     } catch (error) {
-      console.error('Error loading challenger avatar:', error);
+      console.warn(`Failed to load challenger avatar after retries: ${error.message}. Using placeholder.`);
       drawPlaceholderAvatar(ctx, AVATAR_LEFT_X, AVATAR_Y, AVATAR_SIZE, COLORS.challenger);
     }
   } else {
     drawPlaceholderAvatar(ctx, AVATAR_LEFT_X, AVATAR_Y, AVATAR_SIZE, COLORS.challenger);
   }
 
-  // Draw map name (centered, orange)
+  // Draw map name (centered, orange) with truncation if too long
   ctx.fillStyle = COLORS.mapName;
   ctx.font = 'bold 28px Arial';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const mapText = `${mapName} [${difficulty}]`;
+  let mapText = `${mapName} [${difficulty}]`;
+  // Truncate if too long (max ~50 chars to fit canvas width)
+  const maxMapTextWidth = CANVAS_WIDTH - 100;
+  const metrics = ctx.measureText(mapText);
+  if (metrics.width > maxMapTextWidth) {
+    // Truncate and add ellipsis
+    while (ctx.measureText(mapText + '...').width > maxMapTextWidth && mapText.length > 0) {
+      mapText = mapText.slice(0, -1);
+    }
+    mapText = mapText + '...';
+  }
   ctx.fillText(mapText, CANVAS_WIDTH / 2, MAP_NAME_Y);
 
-  // Draw responder avatar (right)
+  // Draw responder avatar (right) with timeout handling
   if (avatar2Url) {
     try {
-      const avatar2 = await loadImage(avatar2Url);
+      const avatar2 = await loadImageWithTimeout(avatar2Url);
       drawCircularImage(ctx, avatar2, AVATAR_RIGHT_X, AVATAR_Y, AVATAR_SIZE);
     } catch (error) {
-      console.error('Error loading responder avatar:', error);
+      console.warn(`Failed to load responder avatar after retries: ${error.message}. Using placeholder.`);
       drawPlaceholderAvatar(ctx, AVATAR_RIGHT_X, AVATAR_Y, AVATAR_SIZE, COLORS.responder);
     }
   } else {
@@ -138,11 +255,16 @@ async function drawHeader(ctx, avatar1Url, avatar2Url, mapName, difficulty, resp
   }
 
   // Draw crown icon for winner (right side, next to responder avatar if they won)
-  if (responderWon) {
-    drawCrownIcon(ctx, AVATAR_RIGHT_X + AVATAR_SIZE + 10, AVATAR_Y + AVATAR_SIZE / 2);
-  } else {
-    // Challenger won, draw crown on left side
-    drawCrownIcon(ctx, AVATAR_LEFT_X + AVATAR_SIZE + 10, AVATAR_Y + AVATAR_SIZE / 2);
+  try {
+    if (responderWon) {
+      drawCrownIcon(ctx, AVATAR_RIGHT_X + AVATAR_SIZE + 10, AVATAR_Y + AVATAR_SIZE / 2);
+    } else {
+      // Challenger won, draw crown on left side
+      drawCrownIcon(ctx, AVATAR_LEFT_X + AVATAR_SIZE + 10, AVATAR_Y + AVATAR_SIZE / 2);
+    }
+  } catch (error) {
+    console.warn('Error drawing crown icon:', error);
+    // Non-critical, continue without crown
   }
 }
 
