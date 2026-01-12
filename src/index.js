@@ -13,8 +13,6 @@ import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect } from './db.js';
 
-const VALID_MODS = ["EZ","NF","HT","HR","SD","PF","DT","NC","HD","FL","RL","SO","SV2"];
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -212,12 +210,6 @@ async function initializeEmojis() {
   return { rankEmojiCache, tetoEmoji, mapStatsEmojiCache };
 }
 
-// Legacy function name for backward compatibility
-async function initializeRankEmojis() {
-  await initializeEmojis();
-  return rankEmojiCache;
-}
-
 // Helper: format rank with emoji
 async function formatRank(rank) {
   if (!rank || rank === 'N/A') return 'N/A';
@@ -263,7 +255,7 @@ async function formatTetoText(text) {
   if (!text || typeof text !== 'string') return text;
   
   // Initialize emojis if not already done (lazy initialization)
-  if (tetoEmoji === null) {
+  if (tetoEmoji == null) {
     await initializeEmojis();
   }
   
@@ -304,6 +296,48 @@ async function getOperatingChannel(guildId, guild, channelType) {
     console.error('Failed to fetch operating channel', err);
     return { error: 'Operating channel is invalid. Re-run setup.' };
   }
+}
+
+// Helper: extract score value from score object (handles both number and object cases)
+function extractScoreValue(score) {
+  if (typeof score.score === 'number') {
+    return score.score;
+  } else if (typeof score.score === 'object' && score.score !== null) {
+    return score.score.total || score.score.value || 0;
+  }
+  return 0;
+}
+
+// Helper: create and post a challenge announcement
+async function createAndPostChallenge(guildId, userId, osuUserId, userScore, opChannel, interaction) {
+  const beatmapId = userScore.beatmap.id.toString();
+  const difficulty = userScore.beatmap.version;
+  
+  // Create new challenge
+  await activeChallenges.create(
+    guildId,
+    beatmapId,
+    difficulty,
+    userId,
+    osuUserId,
+    userScore
+  );
+
+  // Post challenge announcement to operational channel
+  const beatmapLink = formatBeatmapLink(userScore);
+  const playerStats = await formatPlayerStats(userScore);
+  const mapTitle = await getMapTitle(userScore);
+  const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
+  const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
+  
+  const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
+  
+  // Get beatmapset image URL for the embed
+  const imageUrl = await getBeatmapsetImageUrl(userScore);
+  
+  await opChannel.send({ embeds: await createEmbed(challengeMessage, imageUrl) });
+
+  return { difficultyLink, imageUrl, difficultyLabel };
 }
 
 // Helper: format mods from score object
@@ -526,7 +560,7 @@ async function getStarRating(scoreOrBeatmap) {
     || null;
   
   // If not found and we have a beatmap ID, fetch the beatmap
-  if (starRating === null && scoreOrBeatmap?.beatmap?.id) {
+  if (starRating == null && scoreOrBeatmap?.beatmap?.id) {
     try {
       const beatmap = await getBeatmap(scoreOrBeatmap.beatmap.id);
       starRating = beatmap?.difficulty_rating || beatmap?.stars || null;
@@ -551,7 +585,7 @@ async function formatDifficultyLabel(mapTitle, difficulty, scoreOrBeatmap = null
   // Try to get star rating if score/beatmap is provided
   if (scoreOrBeatmap) {
     const starRating = await getStarRating(scoreOrBeatmap);
-    if (starRating !== null) {
+    if (starRating != null) {
       // Format star rating to 2 decimal places
       const starRatingFormatted = starRating.toFixed(2);
       label = `:star: ${starRatingFormatted} ${label}`;
@@ -563,14 +597,8 @@ async function formatDifficultyLabel(mapTitle, difficulty, scoreOrBeatmap = null
 
 // Helper: format player stats from score object
 async function formatPlayerStats(score) {
-  // Safely extract score value - handle both number and object cases
-  let scoreValue = 0;
-  if (typeof score.score === 'number') {
-    scoreValue = score.score;
-  } else if (typeof score.score === 'object' && score.score !== null) {
-    // Sometimes score might be nested in an object
-    scoreValue = score.score.total || score.score.value || 0;
-  }
+  // Safely extract score value
+  const scoreValue = extractScoreValue(score);
   
   const rank = score.rank || 'N/A';
   const rankFormatted = await formatRank(rank);
@@ -592,11 +620,7 @@ async function formatPlayerStats(score) {
   
   // If map stats are not in score object, try to fetch beatmap
   // Check if any stat is missing (null or undefined)
-  const needsFetch = (cs === null || cs === undefined) || 
-                     (ar === null || ar === undefined) || 
-                     (bpm === null || bpm === undefined) || 
-                     (od === null || od === undefined) || 
-                     (hp === null || hp === undefined);
+  const needsFetch = cs == null || ar == null || bpm == null || od == null || hp == null;
   
   if (needsFetch && score.beatmap?.id) {
     try {
@@ -608,16 +632,6 @@ async function formatPlayerStats(score) {
       od = od ?? beatmap?.accuracy ?? beatmap?.overall_difficulty ?? null;
       hp = hp ?? beatmap?.drain ?? beatmap?.hp ?? beatmap?.health ?? null;
       
-      console.log(`[DEBUG formatPlayerStats] Fetched beatmap stats:`, {
-        cs, ar, bpm, od, hp,
-        beatmapKeys: Object.keys(beatmap),
-        hasCs: 'cs' in beatmap,
-        hasAr: 'ar' in beatmap,
-        hasBpm: 'bpm' in beatmap,
-        beatmapCs: beatmap?.cs,
-        beatmapAr: beatmap?.ar,
-        beatmapBpm: beatmap?.bpm
-      });
     } catch (error) {
       console.error('Error fetching beatmap for map stats:', error);
     }
@@ -632,32 +646,18 @@ async function formatPlayerStats(score) {
   stats += `• Hits: **${count300}**/${count100}/${count50}/**${countMiss}**\n`;
   
   // Add Map Stats line if we have the data
-  console.log(`[DEBUG formatPlayerStats] Checking map stats condition:`, {
-    cs, ar, bpm, od, hp,
-    csType: typeof cs,
-    arType: typeof ar,
-    bpmType: typeof bpm,
-    odType: typeof od,
-    hpType: typeof hp,
-    conditionResult: (cs !== null || ar !== null || bpm !== null || od !== null || hp !== null),
-    scoreBeatmapKeys: score.beatmap ? Object.keys(score.beatmap) : 'no beatmap'
-  });
-  
-  if (cs !== null || ar !== null || bpm !== null || od !== null || hp !== null) {
-    const csValue = cs !== null && cs !== undefined ? cs.toFixed(1) : 'N/A';
-    const arValue = ar !== null && ar !== undefined ? ar.toFixed(1) : 'N/A';
-    const bpmValue = bpm !== null && bpm !== undefined ? Math.round(bpm).toString() : 'N/A';
-    const odValue = od !== null && od !== undefined ? od.toFixed(1) : 'N/A';
-    const hpValue = hp !== null && hp !== undefined ? hp.toFixed(1) : 'N/A';
+  if (cs != null || ar != null || bpm != null || od != null || hp != null) {
+    const csValue = cs != null ? cs.toFixed(1) : 'N/A';
+    const arValue = ar != null ? ar.toFixed(1) : 'N/A';
+    const bpmValue = bpm != null ? Math.round(bpm).toString() : 'N/A';
+    const odValue = od != null ? od.toFixed(1) : 'N/A';
+    const hpValue = hp != null ? hp.toFixed(1) : 'N/A';
     const csEmoji = await formatMapStatEmoji('cs');
     const arEmoji = await formatMapStatEmoji('ar');
     const bpmEmoji = await formatMapStatEmoji('bpm');
     const odEmoji = await formatMapStatEmoji('od');
     const hpEmoji = await formatMapStatEmoji('hp');
     stats += `• Map Stats: ${csEmoji} **${csValue}** | ${arEmoji} **${arValue}** | ${bpmEmoji} **${bpmValue}** | ${odEmoji} **${odValue}** | ${hpEmoji} **${hpValue}**\n`;
-    console.log(`[DEBUG formatPlayerStats] Added map stats line with values:`, { csValue, arValue, bpmValue, odValue, hpValue });
-  } else {
-    console.log(`[DEBUG formatPlayerStats] NOT adding map stats line - all values are null/undefined`);
   }
   
   stats += '\n';
@@ -667,14 +667,8 @@ async function formatPlayerStats(score) {
 
 // Helper: format player stats in compact one-line format
 async function formatPlayerStatsCompact(score) {
-  // Safely extract score value - handle both number and object cases
-  let scoreValue = 0;
-  if (typeof score.score === 'number') {
-    scoreValue = score.score;
-  } else if (typeof score.score === 'object' && score.score !== null) {
-    // Sometimes score might be nested in an object
-    scoreValue = score.score.total || score.score.value || 0;
-  }
+  // Safely extract score value
+  const scoreValue = extractScoreValue(score);
   
   const rank = score.rank || 'N/A';
   const rankFormatted = await formatRank(rank);
@@ -811,17 +805,12 @@ function extractBeatmapInfoFromMessage(messageContent) {
   // Sort links by position in message (first to last)
   foundLinks.sort((a, b) => a.linkStart - b.linkStart);
   
-  console.log(`[DEBUG extractBeatmapInfoFromMessage] Found ${foundLinks.length} osu.ppy.sh links`);
-  
   // Step 2: Find the first link that is a beatmap difficulty link
   for (const linkInfo of foundLinks) {
     const beatmapId = extractBeatmapId(linkInfo.linkUrl);
     if (!beatmapId) {
-      console.log(`[DEBUG extractBeatmapInfoFromMessage] Link is not a beatmap link: ${linkInfo.linkUrl}`);
       continue; // Skip non-beatmap links
     }
-    
-    console.log(`[DEBUG extractBeatmapInfoFromMessage] Found beatmap link: ${linkInfo.type}, beatmapId=${beatmapId}, url=${linkInfo.linkUrl}`);
     
     // Step 3: Extract difficulty from the link's context
     let difficulty = null;
@@ -842,7 +831,6 @@ function extractBeatmapInfoFromMessage(messageContent) {
         if (diffBracketCount === 0 && pos >= -1) {
           // Found matching bracket pair
           difficulty = linkText.substring(pos + 2, lastBracketEnd);
-          console.log(`[DEBUG extractBeatmapInfoFromMessage] Extracted difficulty from markdown link text: "${difficulty}"`);
         }
       }
     } else {
@@ -883,20 +871,14 @@ function extractBeatmapInfoFromMessage(messageContent) {
           return distA - distB;
         });
         difficulty = allBrackets[0].content;
-        console.log(`[DEBUG extractBeatmapInfoFromMessage] Extracted difficulty from plain link context: "${difficulty}"`);
       }
     }
     
     if (beatmapId && difficulty) {
-      console.log(`[DEBUG extractBeatmapInfoFromMessage] Returning: beatmapId=${beatmapId}, difficulty=${difficulty}`);
       return { beatmapId, difficulty };
-    } else if (beatmapId) {
-      console.log(`[DEBUG extractBeatmapInfoFromMessage] Found beatmapId=${beatmapId} but no difficulty`);
     }
   }
 
-
-  console.log(`[DEBUG extractBeatmapInfoFromMessage] No beatmap info found in message`);
   return null;
 }
 
@@ -1014,29 +996,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
           // Continue to PART B below
         } else {
-          // Create new challenge
-          await activeChallenges.create(
-            guildId,
-            beatmapId,
-            difficulty,
-            userId,
-            osuUserId,
-            userScore
+          const { difficultyLink, imageUrl } = await createAndPostChallenge(
+            guildId, userId, osuUserId, userScore, opChannel, interaction
           );
-
-          // Post challenge announcement to operational channel
-          const beatmapLink = formatBeatmapLink(userScore);
-          const playerStats = await formatPlayerStats(userScore);
-          const mapTitle = await getMapTitle(userScore);
-          const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
-          const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
-          
-          const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
-          
-          // Get beatmapset image URL for the embed
-          const imageUrl = await getBeatmapsetImageUrl(userScore);
-          
-          await opChannel.send({ embeds: await createEmbed(challengeMessage, imageUrl) });
 
           return interaction.editReply({ 
             embeds: await createEmbed(`Challenge issued for ${difficultyLink}!`, imageUrl)
@@ -1064,7 +1026,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         
         // If best score fetch failed, fallback to most recent score
         if (!userScore) {
-          console.log(`No best score found for beatmap ${beatmapId}, user ${osuUserId}, trying most recent score...`);
           const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
           const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
           
@@ -1087,7 +1048,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
         
         if (!isValidScore(userScore)) {
-          console.log(`Invalid score data for beatmap ${beatmapId}, user ${osuUserId}:`, JSON.stringify(userScore, null, 2));
           return interaction.editReply({ 
             embeds: await createEmbed('Invalid score data received from OSU API. Please try again.'),
             ephemeral: true 
@@ -1100,29 +1060,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         existingChallenge = await activeChallenges.getByDifficulty(guildId, beatmapId, difficulty);
         
         if (!existingChallenge) {
-          // Create new challenge
-          await activeChallenges.create(
-            guildId,
-            beatmapId,
-            difficulty,
-            userId,
-            osuUserId,
-            userScore
+          const { difficultyLink, imageUrl, difficultyLabel } = await createAndPostChallenge(
+            guildId, userId, osuUserId, userScore, opChannel, interaction
           );
-
-          // Post challenge announcement to operational channel
-          const beatmapLink = formatBeatmapLink(userScore);
-          const playerStats = await formatPlayerStats(userScore);
-          const mapTitle = await getMapTitle(userScore);
-          const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
-          const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
-          
-          const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
-          
-          // Get beatmapset image URL for the embed
-          const imageUrl = await getBeatmapsetImageUrl(userScore);
-          
-          await opChannel.send({ embeds: await createEmbed(challengeMessage, imageUrl) });
 
           return interaction.editReply({ 
             embeds: await createEmbed(`Huh? Looks like we are uncontested on **${difficultyLabel}**! COME AND CHALLENGE US!`, imageUrl)
@@ -1147,32 +1087,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
         
-        beatmapId = userScore.beatmap.id.toString();
-        difficulty = userScore.beatmap.version;
-        
-        // Create new challenge
-        await activeChallenges.create(
-          guildId,
-          beatmapId,
-          difficulty,
-          userId,
-          osuUserId,
-          userScore
+        const { difficultyLink, imageUrl } = await createAndPostChallenge(
+          guildId, userId, osuUserId, userScore, opChannel, interaction
         );
-
-        // Post challenge announcement to operational channel
-        const beatmapLink = formatBeatmapLink(userScore);
-        const playerStats = await formatPlayerStats(userScore);
-        const mapTitle = await getMapTitle(userScore);
-        const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
-        const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
-        
-        const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
-        
-        // Get beatmapset image URL for the embed
-        const imageUrl = await getBeatmapsetImageUrl(userScore);
-        
-        await opChannel.send({ embeds: await createEmbed(challengeMessage, imageUrl) });
 
         return interaction.editReply({ 
           embeds: await createEmbed(`Challenge issued for ${difficultyLink}!`, imageUrl)
@@ -1191,7 +1108,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
           
           // If best score fetch failed, fallback to most recent score
           if (!responderScore) {
-            console.log(`No best score found for beatmap ${existingChallenge.beatmapId}, user ${osuUserId}, trying most recent score...`);
             const recentScoresData = await getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
             const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
             
@@ -1367,40 +1283,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
       let beatmapStatus = null;
       let beatmapStatusName = 'Unknown';
       
-      // Debug: Check what's in the score object
-      console.log(`[DEBUG /trs] Score object structure:`, {
-        hasBeatmap: !!userScore.beatmap,
-        beatmapKeys: userScore.beatmap ? Object.keys(userScore.beatmap) : null,
-        beatmapStatus: userScore.beatmap?.status,
-        beatmapsetStatus: userScore.beatmap?.beatmapset?.status,
-        beatmapsetId: userScore.beatmap?.beatmapset_id,
-      });
-      
       // Try to get status from score object first (might be in beatmap or beatmapset)
       if (userScore.beatmap?.status !== undefined) {
         beatmapStatus = userScore.beatmap.status;
         beatmapStatusName = getBeatmapStatusName(beatmapStatus);
-        console.log(`[DEBUG /trs] Got status from score.beatmap.status: ${beatmapStatus} (${beatmapStatusName})`);
       } else if (userScore.beatmap?.beatmapset?.status !== undefined) {
         beatmapStatus = userScore.beatmap.beatmapset.status;
         beatmapStatusName = getBeatmapStatusName(beatmapStatus);
-        console.log(`[DEBUG /trs] Got status from score.beatmap.beatmapset.status: ${beatmapStatus} (${beatmapStatusName})`);
       } else {
         // Fallback: fetch beatmap to get status
         try {
           const beatmap = await getBeatmap(beatmapId);
-          console.log(`[DEBUG /trs] Beatmap API response type:`, typeof beatmap);
-          console.log(`[DEBUG /trs] Beatmap API response keys:`, beatmap ? Object.keys(beatmap) : 'null');
-          console.log(`[DEBUG /trs] Beatmap status field:`, beatmap?.status);
-          console.log(`[DEBUG /trs] Beatmap beatmapset status:`, beatmap?.beatmapset?.status);
-          
           // Status might be in beatmap.status or beatmap.beatmapset.status
           beatmapStatus = beatmap?.status ?? beatmap?.beatmapset?.status;
           beatmapStatusName = getBeatmapStatusName(beatmapStatus);
-          console.log(`[DEBUG /trs] Parsed status: ${beatmapStatus} -> ${beatmapStatusName}`);
         } catch (error) {
-          console.error('[DEBUG /trs] Error fetching beatmap status:', error);
-          console.error('[DEBUG /trs] Error details:', error.message);
           // Continue with unknown status
         }
       }
@@ -1599,7 +1496,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         
         beatmapInfo = extractBeatmapInfoFromMessage(messageText);
         if (beatmapInfo) {
-          console.log(`[DEBUG /tc] Found beatmap info:`, beatmapInfo);
           break;
         }
       }
@@ -1619,17 +1515,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // Get all user's scores for this beatmap
         const allBeatmapScores = await getUserBeatmapScoresAll(beatmapId, osuUserId);
         
-        // Debug logging
-        console.log(`[DEBUG /tc] Beatmap ID: ${beatmapId}, Difficulty: ${difficulty}, User ID: ${osuUserId}`);
-        console.log(`[DEBUG /tc] Total scores returned from API: ${allBeatmapScores.length}`);
-        if (allBeatmapScores.length > 0) {
-          console.log(`[DEBUG /tc] Sample score difficulties:`, allBeatmapScores.slice(0, 5).map(s => ({
-            difficulty: s.beatmap?.version,
-            score: s.score,
-            created_at: s.created_at
-          })));
-        }
-        
         // The API response from /beatmaps/{beatmap}/scores/users/{user}/all doesn't include beatmap.version
         // We need to fetch the beatmap to get the difficulty name, or all scores are for the same beatmap
         // Since all scores are for the same beatmap ID, we can fetch the beatmap once to get the difficulty
@@ -1638,33 +1523,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         try {
           beatmapData = await getBeatmap(beatmapId);
           beatmapDifficulty = beatmapData.version;
-          console.log(`[DEBUG /tc] Beatmap difficulty from API: "${beatmapDifficulty}"`);
-          console.log(`[DEBUG /tc] Beatmap data:`, {
-            hasBeatmapset: !!beatmapData.beatmapset,
-            beatmapsetTitle: beatmapData.beatmapset?.title,
-            beatmapsetId: beatmapData.beatmapset_id || beatmapData.beatmapset?.id,
-            cs: beatmapData.cs,
-            ar: beatmapData.ar,
-            bpm: beatmapData.bpm,
-            accuracy: beatmapData.accuracy,
-            drain: beatmapData.drain,
-            circle_size: beatmapData.circle_size,
-            approach_rate: beatmapData.approach_rate,
-            overall_difficulty: beatmapData.overall_difficulty,
-            hp: beatmapData.hp,
-            health: beatmapData.health,
-            beatmapKeys: Object.keys(beatmapData)
-          });
         } catch (error) {
-          console.error(`[DEBUG /tc] Error fetching beatmap for difficulty:`, error);
+          // Continue without difficulty match
         }
         
         // Since all scores are for the same beatmap, if the difficulty matches, all scores match
         // Compare extracted difficulty with beatmap difficulty
         const matchingScores = (beatmapDifficulty && beatmapDifficulty === difficulty) ? allBeatmapScores : [];
-        
-        console.log(`[DEBUG /tc] Difficulty comparison: extracted="${difficulty}", beatmap="${beatmapDifficulty}", match=${beatmapDifficulty === difficulty}`);
-        console.log(`[DEBUG /tc] Matching scores after filtering: ${matchingScores.length}`);
 
         if (matchingScores.length > 0) {
           // Sort by score value (highest first) and limit to 8
@@ -1685,13 +1550,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
             } else if (beatmapId) {
               beatmapLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
             }
-            console.log(`[DEBUG /tc] Using beatmap data: mapTitle="${mapTitle}", beatmapLink="${beatmapLink}"`);
           } else {
             // Fallback to first score
             const firstScore = sortedScores[0];
             beatmapLink = formatBeatmapLink(firstScore);
             mapTitle = await getMapTitle(firstScore);
-            console.log(`[DEBUG /tc] Using first score data: mapTitle="${mapTitle}", beatmapLink="${beatmapLink}"`);
           }
           
           // Use beatmapData if available, otherwise use first score for star rating
@@ -1724,20 +1587,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 const finalOd = odValue ?? score.beatmap?.accuracy ?? score.beatmap?.overall_difficulty ?? null;
                 const finalHp = hpValue ?? score.beatmap?.drain ?? score.beatmap?.hp ?? score.beatmap?.health ?? null;
                 
-                console.log(`[DEBUG /tc] Map stats from beatmapData:`, {
-                  cs: finalCs,
-                  ar: finalAr,
-                  bpm: finalBpm,
-                  od: finalOd,
-                  hp: finalHp,
-                  beatmapDataCs: beatmapData.cs,
-                  beatmapDataAr: beatmapData.ar,
-                  beatmapDataBpm: beatmapData.bpm,
-                  beatmapDataAccuracy: beatmapData.accuracy,
-                  beatmapDataDrain: beatmapData.drain,
-                  hasScoreBeatmap: !!score.beatmap
-                });
-                
                 // Create or enhance beatmap object
                 enhancedScore = {
                   ...score,
@@ -1756,20 +1605,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     approach_rate: finalAr,
                   }
                 };
-                
-                console.log(`[DEBUG /tc] Enhanced score beatmap stats:`, {
-                  cs: enhancedScore.beatmap.cs,
-                  ar: enhancedScore.beatmap.ar,
-                  bpm: enhancedScore.beatmap.bpm,
-                  accuracy: enhancedScore.beatmap.accuracy,
-                  drain: enhancedScore.beatmap.drain,
-                  beatmapKeys: Object.keys(enhancedScore.beatmap)
-                });
-              } else {
-                console.log(`[DEBUG /tc] NOT enhancing score - beatmapData:`, !!beatmapData);
               }
               const playerStats = await formatPlayerStats(enhancedScore);
-              console.log(`[DEBUG /tc] Player stats result length:`, playerStats.length);
               message += `**Score #${i + 1}**\n${playerStats}`;
             } else {
               // Subsequent scores: compact one-line format
@@ -1820,9 +1657,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 beatmapLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
               }
             }
-            console.log(`[DEBUG /tc] Fetched beatmap for local scores: mapTitle="${mapTitle}", beatmapLink="${beatmapLink}"`);
           } catch (error) {
-            console.error(`[DEBUG /tc] Error fetching beatmap for local scores:`, error);
             // Fallback: use beatmapId to construct basic link if we still don't have one
             if (!beatmapLink && beatmapId) {
               beatmapLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
