@@ -632,18 +632,32 @@ async function formatPlayerStats(score) {
   stats += `• Hits: **${count300}**/${count100}/${count50}/**${countMiss}**\n`;
   
   // Add Map Stats line if we have the data
+  console.log(`[DEBUG formatPlayerStats] Checking map stats condition:`, {
+    cs, ar, bpm, od, hp,
+    csType: typeof cs,
+    arType: typeof ar,
+    bpmType: typeof bpm,
+    odType: typeof od,
+    hpType: typeof hp,
+    conditionResult: (cs !== null || ar !== null || bpm !== null || od !== null || hp !== null),
+    scoreBeatmapKeys: score.beatmap ? Object.keys(score.beatmap) : 'no beatmap'
+  });
+  
   if (cs !== null || ar !== null || bpm !== null || od !== null || hp !== null) {
-    const csValue = cs !== null ? cs.toFixed(1) : 'N/A';
-    const arValue = ar !== null ? ar.toFixed(1) : 'N/A';
-    const bpmValue = bpm !== null ? Math.round(bpm).toString() : 'N/A';
-    const odValue = od !== null ? od.toFixed(1) : 'N/A';
-    const hpValue = hp !== null ? hp.toFixed(1) : 'N/A';
+    const csValue = cs !== null && cs !== undefined ? cs.toFixed(1) : 'N/A';
+    const arValue = ar !== null && ar !== undefined ? ar.toFixed(1) : 'N/A';
+    const bpmValue = bpm !== null && bpm !== undefined ? Math.round(bpm).toString() : 'N/A';
+    const odValue = od !== null && od !== undefined ? od.toFixed(1) : 'N/A';
+    const hpValue = hp !== null && hp !== undefined ? hp.toFixed(1) : 'N/A';
     const csEmoji = await formatMapStatEmoji('cs');
     const arEmoji = await formatMapStatEmoji('ar');
     const bpmEmoji = await formatMapStatEmoji('bpm');
     const odEmoji = await formatMapStatEmoji('od');
     const hpEmoji = await formatMapStatEmoji('hp');
     stats += `• Map Stats: ${csEmoji} **${csValue}** | ${arEmoji} **${arValue}** | ${bpmEmoji} **${bpmValue}** | ${odEmoji} **${odValue}** | ${hpEmoji} **${hpValue}**\n`;
+    console.log(`[DEBUG formatPlayerStats] Added map stats line with values:`, { csValue, arValue, bpmValue, odValue, hpValue });
+  } else {
+    console.log(`[DEBUG formatPlayerStats] NOT adding map stats line - all values are null/undefined`);
   }
   
   stats += '\n';
@@ -1709,10 +1723,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
                   bpm: bpmValue,
                   od: odValue,
                   hp: hpValue,
-                  beatmapDataKeys: Object.keys(beatmapData),
-                  hasCs: 'cs' in beatmapData,
-                  hasAr: 'ar' in beatmapData,
-                  hasBpm: 'bpm' in beatmapData
+                  beatmapDataCs: beatmapData.cs,
+                  beatmapDataAr: beatmapData.ar,
+                  beatmapDataBpm: beatmapData.bpm,
+                  beatmapDataAccuracy: beatmapData.accuracy,
+                  beatmapDataDrain: beatmapData.drain
                 });
                 
                 enhancedScore = {
@@ -1731,8 +1746,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     approach_rate: arValue,
                   }
                 };
+                
+                console.log(`[DEBUG /tc] Enhanced score beatmap stats:`, {
+                  cs: enhancedScore.beatmap.cs,
+                  ar: enhancedScore.beatmap.ar,
+                  bpm: enhancedScore.beatmap.bpm,
+                  accuracy: enhancedScore.beatmap.accuracy,
+                  drain: enhancedScore.beatmap.drain
+                });
+              } else {
+                console.log(`[DEBUG /tc] NOT enhancing score - beatmapData:`, !!beatmapData, `score.beatmap:`, !!score.beatmap);
               }
               const playerStats = await formatPlayerStats(enhancedScore);
+              console.log(`[DEBUG /tc] Player stats result length:`, playerStats.length);
               message += `**Score #${i + 1}**\n${playerStats}`;
             } else {
               // Subsequent scores: compact one-line format
