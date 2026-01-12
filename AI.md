@@ -171,6 +171,40 @@ Issue or respond to a score challenge.
 - If challenge exists: Compares scores and updates champion if responder wins
 - If no challenge: Creates new challenge
 
+### `/teto test` (Admin only)
+UI testing command that simulates the output of other commands without affecting real data.
+- Options: `command` (required, choices: `trs`, `tc`, `rsci`, `rscr`, `motd`, `report`)
+- Uses mock data from `src/test-mock-data.js` or random real data from database (read-only)
+- **Never modifies database** - purely for UI testing
+- Each option simulates:
+  - `trs`: `/trs` command (singular most recent score)
+  - `tc`: `/tc` command (list of scores)
+  - `rsci`: Challenge issuing part of `/rsc`
+  - `rscr`: Challenge responding part of `/rsc` (simple message, not embed)
+  - `motd`: `/teto map submit` command
+  - `report`: Weekly challenges report (uses real `generateWeeklyUpdate()` function)
+
+#### Test Commands Infrastructure
+The test commands are designed to share infrastructure with real commands:
+
+**Automatic Updates** (no manual changes needed):
+- Test commands use the same helper functions as real commands:
+  - Formatting: `formatPlayerStats()`, `formatPlayerStatsCompact()`, `formatDifficultyLabel()`, `formatStarRating()`, `formatMods()`, `formatBeatmapLink()`, `formatTetoText()`
+  - Data fetching: `getBeatmapsetImageUrl()`, `getMapTitle()`, `getStarRating()`, `getBeatmap()`
+  - Business logic: `compareScores()`, `createAndPostChallenge()`, `generateWeeklyUpdate()`
+  - Embed creation: `createEmbed()`
+- **If you update any helper function, test commands automatically reflect the changes**
+
+**Manual Updates Required**:
+- Test commands simulate the flow but don't call real command handlers directly
+- Manual updates needed for:
+  - Command flow/structure changes (new validation steps, order of operations)
+  - Error handling logic specific to commands
+  - Message structure/formatting not in helper functions
+  - New features requiring different test data or flow
+
+**Summary**: Helper function changes → automatic. Command structure/flow changes → manual update needed.
+
 ## Challenge Flow
 
 1. **Issuing a Challenge**:
