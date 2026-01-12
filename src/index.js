@@ -937,32 +937,7 @@ async function testTrsCommand(interaction, guildId) {
 
     // Simulate beatmap status check (like real /trs)
     const statusMessage = `\n**[TEST MODE]** This map is **WIP**. ${await formatTetoText('Teto will remember this score.')}`;
-    let message = `**[TEST MODE]** Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
-
-    // Create mock scores list (like real /trs shows "All your scores on this difficulty")
-    // In real command, this comes from API/local DB, but for test we use mock data
-    const mockScoresList = createMockScores(testScore, 3);
-    
-    if (mockScoresList.length > 0) {
-      message += `\n\n**All your scores on this difficulty:**\n\n`;
-      
-      // Get teto emoji for marking local scores
-      let tetoEmojiString = ':teto:';
-      if (tetoEmoji == null) {
-        await initializeEmojis();
-      }
-      if (tetoEmoji) {
-        tetoEmojiString = tetoEmoji.toString();
-      }
-      
-      for (let i = 0; i < mockScoresList.length; i++) {
-        const score = mockScoresList[i];
-        const compactStats = await formatPlayerStatsCompact(score);
-        // Mark first score as local (since it's from test data)
-        const tetoMarker = i === 0 ? ` ${tetoEmojiString}` : '';
-        message += `**Score #${i + 1}**${tetoMarker}: ${compactStats}\n`;
-      }
-    }
+    const message = `**[TEST MODE]** Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
 
     const imageUrl = await getBeatmapsetImageUrl(testScore);
     return interaction.editReply({ 
