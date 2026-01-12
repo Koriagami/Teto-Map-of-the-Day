@@ -13,6 +13,7 @@ import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect, prisma } from './db.js';
 import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty, createMockScores } from './test-mock-data.js';
+import { generateChallengeStatCard } from './stat-card-generator.js';
 
 const client = new Client({
   intents: [
@@ -1073,16 +1074,66 @@ async function testRscRespondCommand(interaction, guildId) {
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
     const comparisonResult = compareScores(challengerScore, responderScore, interaction.user.username);
-    const { table: comparison } = comparisonResult;
+    const { responderWins } = comparisonResult;
+    const responderWon = responderWins >= 3;
+
+    // Get Discord user avatars for stat card
+    let challengerAvatarUrl = null;
+    let responderAvatarUrl = null;
+    try {
+      // For test, use interaction user as challenger if we have a challenge, otherwise use a placeholder
+      if (challenges.length > 0) {
+        const challengerUserId = challenges[0].challengerUserId;
+        const challengerUser = await client.users.fetch(challengerUserId).catch(() => null);
+        if (challengerUser) {
+          challengerAvatarUrl = challengerUser.displayAvatarURL({ extension: 'png', size: 256 });
+        }
+      }
+      responderAvatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
+    } catch (error) {
+      console.error('Error fetching user avatars in test command:', error);
+    }
+
+    // Get usernames
+    const challengerUsername = challengerScore.user?.username || 'ChallengerUser';
+    const responderUsername = interaction.user.username;
+
+    // Generate stat card image
+    let statCardAttachment = null;
+    try {
+      statCardAttachment = await generateChallengeStatCard(
+        challengerScore,
+        responderScore,
+        challengerUsername,
+        responderUsername,
+        mapTitle,
+        difficulty,
+        challengerAvatarUrl,
+        responderAvatarUrl,
+        responderWon
+      );
+    } catch (error) {
+      console.error('Error generating stat card in test command:', error);
+    }
 
     const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
-    const responseMessage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
+    const responseMessage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!${statusMessage}\n${separator}`;
 
     // Real /rsc command sends as content (plain message), not embed
-    return interaction.editReply({ 
-      content: responseMessage
-    });
+    if (statCardAttachment) {
+      return interaction.editReply({ 
+        content: responseMessage,
+        files: [statCardAttachment]
+      });
+    } else {
+      // Fallback to text table if image generation failed
+      const { table: comparison } = comparisonResult;
+      const responseMessageWithTable = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
+      return interaction.editReply({ 
+        content: responseMessageWithTable
+      });
+    }
   } catch (error) {
     console.error('Error in testRscRespondCommand:', error);
     throw error;
@@ -1497,6 +1548,43 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
 
+      // Get Discord user avatars for stat card
+      let challengerAvatarUrl = null;
+      let responderAvatarUrl = null;
+      try {
+        const challengerUser = await client.users.fetch(existingChallenge.challengerUserId).catch(() => null);
+        if (challengerUser) {
+          challengerAvatarUrl = challengerUser.displayAvatarURL({ extension: 'png', size: 256 });
+        }
+        responderAvatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 256 });
+      } catch (error) {
+        console.error('Error fetching user avatars:', error);
+        // Continue without avatars - stat card will use placeholders
+      }
+
+      // Get usernames
+      const challengerUsername = challengerScore.user?.username || 'Challenger';
+      const responderUsername = interaction.user.username;
+
+      // Generate stat card image
+      let statCardAttachment = null;
+      try {
+        statCardAttachment = await generateChallengeStatCard(
+          challengerScore,
+          responderScore,
+          challengerUsername,
+          responderUsername,
+          mapTitle,
+          challengeDifficulty,
+          challengerAvatarUrl,
+          responderAvatarUrl,
+          responderWon
+        );
+      } catch (error) {
+        console.error('Error generating stat card:', error);
+        // Fall back to text table if image generation fails
+      }
+
       // Build response message with win/loss status and separators
       const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
       let statusMessage = '';
@@ -1506,10 +1594,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
         statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
       }
 
-      const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
+      // Use stat card image if available, otherwise fall back to text table
+      const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!${statusMessage}\n${separator}`;
 
-      // Post comparison results to Challenges channel (use standard message, not embed)
-      await opChannel.send({ content: responseMessage });
+      // Post comparison results to Challenges channel
+      if (statCardAttachment) {
+        // Send with stat card image
+        await opChannel.send({ 
+          content: responseMessage,
+          files: [statCardAttachment]
+        });
+      } else {
+        // Fall back to text table if image generation failed
+        const responseMessageWithTable = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
+        await opChannel.send({ content: responseMessageWithTable });
+      }
 
       // Send confirmation to user
       return interaction.editReply({ 
