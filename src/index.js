@@ -11,7 +11,8 @@ import {
 import cron from 'node-cron';
 import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
-import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect } from './db.js';
+import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect, prisma } from './db.js';
+import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty } from './test-mock-data.js';
 
 const client = new Client({
   intents: [
@@ -907,6 +908,254 @@ function extractOsuProfile(profileLink) {
   }
 
   return null;
+}
+
+// Test command functions (read-only, no data modification)
+async function testTrsCommand(interaction, guildId) {
+  // Get a random local score or create mock data
+  try {
+    const localScoreRecords = await prisma.localScore.findMany({
+      where: { guildId },
+      take: 1,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let testScore;
+    if (localScoreRecords.length > 0) {
+      testScore = localScoreRecords[0].score;
+    } else {
+      testScore = mockScore;
+    }
+
+    const beatmapLink = formatBeatmapLink(testScore);
+    const playerStats = await formatPlayerStats(testScore);
+    const mapTitle = await getMapTitle(testScore);
+    const difficulty = testScore.beatmap?.version || defaultDifficulty;
+    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+    const starRatingText = await formatStarRating(testScore);
+    const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
+
+    const statusMessage = `\n**[TEST MODE]** This map is **WIP**. ${await formatTetoText('Teto will remember this score.')}`;
+    let message = `**[TEST MODE]** Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
+
+    // Add sample scores list
+    message += `\n\n**All your scores on this difficulty:**\n\n`;
+    for (let i = 1; i <= 3; i++) {
+      const compactStats = await formatPlayerStatsCompact(testScore);
+      message += `**Score #${i}**: ${compactStats}\n`;
+    }
+
+    const imageUrl = await getBeatmapsetImageUrl(testScore);
+    return interaction.editReply({ 
+      embeds: await createEmbed(message, imageUrl)
+    });
+  } catch (error) {
+    console.error('Error in testTrsCommand:', error);
+    throw error;
+  }
+}
+
+async function testTcCommand(interaction, guildId) {
+  // Get a random local score or create mock data
+  try {
+    const localScoreRecords = await prisma.localScore.findMany({
+      where: { guildId },
+      take: 1,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let testScore;
+    if (localScoreRecords.length > 0) {
+      testScore = localScoreRecords[0].score;
+    } else {
+      testScore = mockScoreSingleMod;
+    }
+
+    const beatmapLink = formatBeatmapLink(testScore);
+    const mapTitle = await getMapTitle(testScore);
+    const difficulty = testScore.beatmap?.version || defaultDifficulty;
+    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+    const starRatingText = await formatStarRating(testScore);
+    const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
+
+    let message = `**[TEST MODE]** Your scores on ${difficultyLink}:\n\n`;
+
+    // First score: full format
+    const playerStats = await formatPlayerStats(testScore);
+    message += `**Score #1**\n${playerStats}`;
+
+    // Subsequent scores: compact format
+    for (let i = 2; i <= 3; i++) {
+      const compactStats = await formatPlayerStatsCompact(testScore);
+      message += `**Score #${i}**: ${compactStats}\n`;
+    }
+
+    const imageUrl = await getBeatmapsetImageUrl(testScore);
+    return interaction.editReply({ 
+      embeds: await createEmbed(message, imageUrl)
+    });
+  } catch (error) {
+    console.error('Error in testTcCommand:', error);
+    throw error;
+  }
+}
+
+async function testRscIssueCommand(interaction, guildId) {
+  // Get a random challenge or create mock data
+  try {
+    const challenges = await prisma.activeChallenge.findMany({
+      where: { guildId },
+      take: 1,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let testScore;
+    if (challenges.length > 0) {
+      testScore = challenges[0].challengerScore;
+    } else {
+      testScore = mockScore;
+    }
+
+    const beatmapLink = formatBeatmapLink(testScore);
+    const playerStats = await formatPlayerStats(testScore);
+    const mapTitle = await getMapTitle(testScore);
+    const difficulty = testScore.beatmap?.version || defaultDifficulty;
+    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+    const starRatingText = await formatStarRating(testScore);
+    const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
+
+    const challengeMessage = `**[TEST MODE]** <@${interaction.user.id}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
+    const imageUrl = await getBeatmapsetImageUrl(testScore);
+
+    return interaction.editReply({ 
+      embeds: await createEmbed(challengeMessage, imageUrl)
+    });
+  } catch (error) {
+    console.error('Error in testRscIssueCommand:', error);
+    throw error;
+  }
+}
+
+async function testRscRespondCommand(interaction, guildId) {
+  // Get a random challenge or create mock data
+  try {
+    const challenges = await prisma.activeChallenge.findMany({
+      where: { guildId },
+      take: 1,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let challengerScore, responderScore;
+    if (challenges.length > 0) {
+      challengerScore = challenges[0].challengerScore;
+      // Ensure user object exists
+      if (!challengerScore.user) {
+        challengerScore.user = { username: 'ChallengerUser' };
+      }
+      responderScore = createMockResponderScore(challengerScore, interaction.user.username);
+    } else {
+      challengerScore = mockChallengerScore;
+      responderScore = createMockResponderScore(mockChallengerScore, interaction.user.username);
+    }
+
+    const mapTitle = await getMapTitle(challengerScore);
+    const difficulty = challengerScore.beatmap?.version || defaultDifficulty;
+    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+    const starRatingText = await formatStarRating(challengerScore);
+    const beatmapLink = formatBeatmapLink(challengerScore);
+    const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
+
+    const comparisonResult = compareScores(challengerScore, responderScore, interaction.user.username);
+    const { table: comparison } = comparisonResult;
+
+    const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+    const statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
+    const responseMessage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
+
+    return interaction.editReply({ 
+      content: responseMessage
+    });
+  } catch (error) {
+    console.error('Error in testRscRespondCommand:', error);
+    throw error;
+  }
+}
+
+async function testMotdCommand(interaction, guildId) {
+  // Create mock map submission data
+  try {
+    const mapName = mockBeatmap.beatmapset.title;
+    const difficultyName = mockBeatmap.version;
+    const difficultyLink = `https://osu.ppy.sh/beatmapsets/${mockBeatmap.beatmapset_id}#osu/${mockBeatmap.id}`;
+    const starRatingText = await formatStarRating(mockBeatmap);
+    const label = formatDifficultyLabel(mapName, difficultyName);
+    const difficultyLabel = `${starRatingText}[${label}](${difficultyLink})`;
+
+    const mods = mockMods;
+    let msgContent = `**[TEST MODE]** <@${interaction.user.id}> map of the day is - ${difficultyLabel}`;
+    if (mods.length > 0) {
+      msgContent += `\nRecommended mods: ${mods.join(', ')}`;
+    }
+
+    const imageUrl = await getBeatmapsetImageUrl(mockBeatmap);
+    return interaction.editReply({ 
+      embeds: await createEmbed(msgContent, imageUrl)
+    });
+  } catch (error) {
+    console.error('Error in testMotdCommand:', error);
+    throw error;
+  }
+}
+
+async function testReportCommand(interaction, guildId) {
+  // Use the actual generateWeeklyUpdate function but don't post to channel
+  try {
+    // Get challenges channel for validation
+    const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'challenges');
+    if (opChannelResult.error || !opChannelResult.channel) {
+      return interaction.editReply({ 
+        embeds: await createEmbed(opChannelResult.error || 'Challenges channel is not configured. Use `/teto setup` to configure it.'),
+        ephemeral: true 
+      });
+    }
+
+    // Generate weekly update report (read-only, uses real data)
+    const messages = await generateWeeklyUpdate(guildId);
+    
+    if (messages && messages.length > 0) {
+      // Return the report as embeds (don't post to channel in test mode)
+      const allEmbeds = messages.flat();
+      // Discord allows max 10 embeds per message, so we need to split if needed
+      const embedChunks = [];
+      for (let i = 0; i < allEmbeds.length; i += 10) {
+        embedChunks.push(allEmbeds.slice(i, i + 10));
+      }
+
+      // Send first chunk as reply
+      if (embedChunks.length > 0) {
+        await interaction.editReply({ 
+          embeds: embedChunks[0],
+          content: '**[TEST MODE]** Weekly challenges report preview:'
+        });
+
+        // Send remaining chunks as follow-ups if any
+        for (let i = 1; i < embedChunks.length; i++) {
+          await interaction.followUp({ 
+            embeds: embedChunks[i],
+            ephemeral: false
+          });
+        }
+      }
+    } else {
+      return interaction.editReply({ 
+        embeds: await createEmbed('**[TEST MODE]** No challenges data to report for the last 30 days.'),
+        ephemeral: true 
+      });
+    }
+  } catch (error) {
+    console.error('Error in testReportCommand:', error);
+    throw error;
+  }
 }
 
 // When ready
@@ -1897,7 +2146,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 **Setup & Configuration:**
 • \`/teto setup\` - Configure bot channels (admin only). Set current channel for TMOTD or Challenges
 • \`/teto link\` - Link your Discord account to your OSU! profile
-• \`/teto get_c_report\` - Generate and post weekly challenges report (admin only)
+• \`/teto test\` - Test command UI (admin only)
 • \`/teto help\` - Show this help message
 
 **Note:** Most commands require linking your OSU! profile first using \`/teto link\``;
@@ -1908,7 +2157,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     });
   }
 
-  if (sub === 'get_c_report') {
+  // /teto test
+  if (sub === 'test') {
     // only admins (including server owner)
     const member = interaction.member;
     if (!member) {
@@ -1926,71 +2176,52 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return interaction.reply({ embeds: await createEmbed('Only administrators can run this command.'), ephemeral: true });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ ephemeral: false });
 
     try {
-      // Get challenges channel
-      const opChannelResult = await getOperatingChannel(guildId, interaction.guild, 'challenges');
-      if (opChannelResult.error || !opChannelResult.channel) {
+      const testCommand = interaction.options.getString('command');
+      if (!testCommand) {
         return interaction.editReply({ 
-          embeds: await createEmbed(opChannelResult.error || 'Challenges channel is not configured. Use `/teto setup` to configure it.'),
+          embeds: await createEmbed('Invalid test command. Available: trs, tc, rsci, rscr, motd, report'),
           ephemeral: true 
         });
       }
 
-      // Check bot permissions in the channel
-      const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
-      const botPermissions = opChannelResult.channel.permissionsFor(botMember);
-      if (!botPermissions || !botPermissions.has(PermissionsBitField.Flags.SendMessages)) {
-        return interaction.editReply({ 
-          embeds: await createEmbed(`❌ Bot is missing permissions to send messages in <#${opChannelResult.channel.id}>. Please grant the bot "Send Messages" permission in that channel.`),
-          ephemeral: true 
-        });
-      }
-
-      // Generate weekly update report
-      const messages = await generateWeeklyUpdate(guildId);
-      
-      if (messages && messages.length > 0) {
-        // Post messages to challenges channel (suppress embeds/thumbnails)
-        try {
-          for (const embedArray of messages) {
-            await opChannelResult.channel.send({
-              embeds: embedArray,
-            });
-        }
-        return interaction.editReply({ 
-            embeds: await createEmbed(`✅ Weekly challenges report posted to <#${opChannelResult.channel.id}>!`),
-          ephemeral: true 
-        });
-        } catch (sendError) {
-          console.error('Error sending report messages:', sendError);
+      switch (testCommand) {
+        case 'trs':
+          await testTrsCommand(interaction, guildId);
+          break;
+        case 'tc':
+          await testTcCommand(interaction, guildId);
+          break;
+        case 'rsci':
+          await testRscIssueCommand(interaction, guildId);
+          break;
+        case 'rscr':
+          await testRscRespondCommand(interaction, guildId);
+          break;
+        case 'motd':
+          await testMotdCommand(interaction, guildId);
+          break;
+        case 'report':
+          await testReportCommand(interaction, guildId);
+          break;
+        default:
           return interaction.editReply({ 
-            embeds: await createEmbed(`❌ Failed to post report to <#${opChannelResult.channel.id}>. Error: ${sendError.message}\n\nPlease check that the bot has "Send Messages" permission in that channel.`),
+            embeds: await createEmbed('Invalid test command. Available: trs, tc, rsci, rscr, motd, report'),
             ephemeral: true 
           });
-        }
-      } else {
-        return interaction.editReply({ 
-          embeds: await createEmbed('No challenges data to report for the last 30 days.'),
-          ephemeral: true 
-        });
       }
     } catch (error) {
-      console.error('Error generating challenges report:', error);
-      // Check if it's a permissions error
-      if (error.message && (error.message.includes('permission') || error.message.includes('Missing') || error.code === 50013)) {
+      console.error('Error in /teto test command:', error);
       return interaction.editReply({ 
-          embeds: await createEmbed(`❌ Missing permissions: ${error.message}\n\nPlease ensure the bot has "Send Messages" permission in the Challenges channel.`),
-          ephemeral: true 
-        });
-      }
-      return interaction.editReply({ 
-        embeds: await createEmbed(`Error generating report: ${error.message}`),
+        embeds: await createEmbed(`Error: ${error.message}`),
         ephemeral: true 
       });
     }
+    return;
   }
+
 
   // /teto map submit
   if (subcommandGroup === 'map' && sub === 'submit') {

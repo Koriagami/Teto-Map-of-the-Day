@@ -33,8 +33,22 @@ const mapSubmit = new SlashCommandBuilder()
   )
   .addSubcommand(sub =>
     sub
-      .setName('get_c_report')
-      .setDescription('Generate and post the weekly challenges report (admin only)')
+      .setName('test')
+      .setDescription('Test command UI (admin only)')
+      .addStringOption(opt =>
+        opt
+          .setName('command')
+          .setDescription('Command to test')
+          .setRequired(true)
+          .addChoices(
+            { name: 'trs', value: 'trs' },
+            { name: 'tc', value: 'tc' },
+            { name: 'rsci', value: 'rsci' },
+            { name: 'rscr', value: 'rscr' },
+            { name: 'motd', value: 'motd' },
+            { name: 'report', value: 'report' }
+          )
+      )
   )
   .addSubcommand(sub =>
     sub
