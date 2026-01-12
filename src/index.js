@@ -1072,8 +1072,11 @@ async function testRscRespondCommand(interaction, guildId) {
     const statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
     const responseMessage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
 
+    // Get beatmapset image URL for the embed
+    const imageUrl = await getBeatmapsetImageUrl(challengerScore);
+
     return interaction.editReply({ 
-      content: responseMessage
+      embeds: await createEmbed(responseMessage, imageUrl)
     });
   } catch (error) {
     console.error('Error in testRscRespondCommand:', error);
