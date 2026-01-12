@@ -1,5 +1,7 @@
-import { createCanvas, loadImage } from 'canvas';
+import { createCanvas, loadImage, registerFont } from 'canvas';
 import { AttachmentBuilder } from 'discord.js';
+import { existsSync } from 'fs';
+import { execSync } from 'child_process';
 
 /**
  * Check if canvas is available (system dependencies installed)
@@ -35,6 +37,99 @@ const CANVAS_HEIGHT = 800;
 const AVATAR_LOAD_TIMEOUT = 5000; // 5 seconds
 const AVATAR_MAX_RETRIES = 2;
 const IMAGE_QUALITY = 0.85; // JPEG quality (0-1), balance between size and quality
+
+// Font registration - try to register system fonts
+let fontsRegistered = false;
+function registerSystemFonts() {
+  if (fontsRegistered) return;
+  
+  // Common font paths in Linux systems
+  const fontPaths = [
+    // DejaVu fonts (common in Nix/Ubuntu)
+    '/nix/store/*/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
+    // Liberation fonts
+    '/nix/store/*/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    '/usr/share/fonts/TTF/LiberationSans-Bold.ttf',
+  ];
+  
+  // Try to find and register DejaVu Sans Bold
+  const dejaVuBoldPaths = [
+    '/nix/store/*/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
+  ];
+  
+  // Try to find and register Liberation Sans Bold
+  const liberationBoldPaths = [
+    '/nix/store/*/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+    '/usr/share/fonts/TTF/LiberationSans-Bold.ttf',
+  ];
+  
+  // Try to find and register regular fonts too
+  const dejaVuRegularPaths = [
+    '/nix/store/*/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/usr/share/fonts/TTF/DejaVuSans.ttf',
+  ];
+  
+  const liberationRegularPaths = [
+    '/nix/store/*/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+    '/usr/share/fonts/TTF/LiberationSans-Regular.ttf',
+  ];
+  
+  // Register fonts if found (use glob pattern matching for nix store paths)
+  try {
+    // Try to find DejaVu fonts using find command
+    try {
+      const dejaVuBold = execSync('find /nix/store -name "DejaVuSans-Bold.ttf" 2>/dev/null | head -1', { encoding: 'utf-8', timeout: 2000 }).trim();
+      if (dejaVuBold && existsSync(dejaVuBold)) {
+        registerFont(dejaVuBold, { family: 'DejaVu Sans' });
+        console.log('Registered DejaVu Sans Bold font');
+      }
+    } catch (e) {
+      // Font not found, continue
+    }
+    
+    try {
+      const dejaVuRegular = execSync('find /nix/store -name "DejaVuSans.ttf" 2>/dev/null | head -1', { encoding: 'utf-8', timeout: 2000 }).trim();
+      if (dejaVuRegular && existsSync(dejaVuRegular)) {
+        registerFont(dejaVuRegular, { family: 'DejaVu Sans' });
+        console.log('Registered DejaVu Sans Regular font');
+      }
+    } catch (e) {
+      // Font not found, continue
+    }
+    
+    try {
+      const liberationBold = execSync('find /nix/store -name "LiberationSans-Bold.ttf" 2>/dev/null | head -1', { encoding: 'utf-8', timeout: 2000 }).trim();
+      if (liberationBold && existsSync(liberationBold)) {
+        registerFont(liberationBold, { family: 'Liberation Sans' });
+        console.log('Registered Liberation Sans Bold font');
+      }
+    } catch (e) {
+      // Font not found, continue
+    }
+    
+    try {
+      const liberationRegular = execSync('find /nix/store -name "LiberationSans-Regular.ttf" 2>/dev/null | head -1', { encoding: 'utf-8', timeout: 2000 }).trim();
+      if (liberationRegular && existsSync(liberationRegular)) {
+        registerFont(liberationRegular, { family: 'Liberation Sans' });
+        console.log('Registered Liberation Sans Regular font');
+      }
+    } catch (e) {
+      // Font not found, continue
+    }
+  } catch (error) {
+    console.warn('Could not register system fonts, will use fallback:', error.message);
+  }
+  
+  fontsRegistered = true;
+}
 
 // Layout constants
 const AVATAR_SIZE = 120; // Increased from 80
@@ -136,6 +231,9 @@ export async function generateChallengeStatCard(
       throw new Error('Invalid score data: challengerScore and responderScore are required');
     }
     
+    // Register fonts before creating canvas
+    registerSystemFonts();
+    
     // Create canvas with error handling
     try {
       canvas = createCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -231,8 +329,8 @@ async function drawHeader(ctx, avatar1Url, avatar2Url, mapName, difficulty, resp
 
   // Draw map name (centered, orange) with truncation if too long
   ctx.fillStyle = COLORS.mapName;
-  // Use system font that's guaranteed to be available on Linux
-  ctx.font = 'bold 28px Sans';
+  // Use registered font or fallback to system font
+  ctx.font = 'bold 28px "DejaVu Sans", "Liberation Sans", Sans';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   let mapText = `${mapName} [${difficulty}]`;
@@ -444,8 +542,8 @@ function drawStatTable(ctx, stats, challengerUsername, responderUsername, respon
 
     // Draw stat label (center, white)
     ctx.fillStyle = COLORS.label;
-    // Use system font that's guaranteed to be available on Linux
-    ctx.font = '20px Sans';
+    // Use registered font or fallback to system font
+    ctx.font = '20px "DejaVu Sans", "Liberation Sans", Sans';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, LABEL_COLUMN_X, y + ROW_HEIGHT / 2);
@@ -499,8 +597,8 @@ function drawStatRow(ctx, x, y, value, formatFn, color, isWinner, barWidth, stat
   
   // Format and draw value text
   ctx.fillStyle = color;
-  // Use system font that's guaranteed to be available on Linux
-  ctx.font = 'bold 18px Sans';
+  // Use registered font or fallback to system font
+  ctx.font = 'bold 18px "DejaVu Sans", "Liberation Sans", Sans';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   const formattedValue = formatFn(value);

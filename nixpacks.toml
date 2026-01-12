@@ -16,7 +16,9 @@ nixPkgs = [
   "pkgs.libpng",
   "pkgs.libjpeg",
   "pkgs.giflib",
-  "pkgs.librsvg"
+  "pkgs.librsvg",
+  "pkgs.dejavu_fonts",
+  "pkgs.liberation_ttf"
 ]
 
 [phases.install]
