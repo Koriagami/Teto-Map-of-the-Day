@@ -1090,14 +1090,49 @@ async function testRscRespondCommand(interaction, guildId) {
 }
 
 async function testMotdCommand(interaction, guildId) {
-  // Create mock map submission data
+  // Use real map link for testing
   try {
-    const mapName = mockBeatmap.beatmapset.title;
-    const difficultyName = mockBeatmap.version;
-    const difficultyLink = `https://osu.ppy.sh/beatmapsets/${mockBeatmap.beatmapset_id}#osu/${mockBeatmap.id}`;
-    const starRatingText = await formatStarRating(mockBeatmap);
-    const label = formatDifficultyLabel(mapName, difficultyName);
-    const difficultyLabel = `${starRatingText}[${label}](${difficultyLink})`;
+    const mapLink = 'https://osu.ppy.sh/beatmapsets/1322944#osu/2988681';
+    
+    // Get beatmap data to format message with map name and difficulty
+    let mapName = null;
+    let difficultyName = null;
+    let difficultyLink = mapLink; // Fallback to original link if we can't get beatmap data
+    let imageUrl = null;
+    let beatmap = null;
+    
+    try {
+      const beatmapId = extractBeatmapId(mapLink);
+      if (beatmapId) {
+        beatmap = await getBeatmap(beatmapId);
+        mapName = beatmap?.beatmapset?.title || beatmap?.beatmapset?.title_unicode || null;
+        difficultyName = beatmap?.version || null;
+        imageUrl = await getBeatmapsetImageUrl(beatmap);
+        
+        // Construct difficulty link
+        const beatmapsetId = beatmap?.beatmapset_id || beatmap?.beatmapset?.id;
+        if (beatmapsetId && beatmapId) {
+          difficultyLink = `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${beatmapId}`;
+        } else if (beatmapId) {
+          difficultyLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
+        }
+      }
+    } catch (error) {
+      console.error('Error getting beatmap data for test motd:', error);
+      // Continue with fallback link if there's an error
+    }
+
+    // Format message with map name and difficulty as link (with star rating)
+    let difficultyLabel = null;
+    if (mapName && difficultyName) {
+      const labelWithStar = await formatDifficultyLabel(mapName, difficultyName, beatmap);
+      difficultyLabel = `[${labelWithStar}](${difficultyLink})`;
+    } else if (difficultyName) {
+      const labelWithStar = await formatDifficultyLabel('Unknown Map', difficultyName, beatmap);
+      difficultyLabel = `[${labelWithStar}](${difficultyLink})`;
+    } else {
+      difficultyLabel = difficultyLink; // Fallback to plain link
+    }
 
     const mods = mockMods;
     let msgContent = `**[TEST MODE]** <@${interaction.user.id}> map of the day is - ${difficultyLabel}`;
@@ -1105,7 +1140,6 @@ async function testMotdCommand(interaction, guildId) {
       msgContent += `\nRecommended mods: ${mods.join(', ')}`;
     }
 
-    const imageUrl = await getBeatmapsetImageUrl(mockBeatmap);
     return interaction.editReply({ 
       embeds: await createEmbed(msgContent, imageUrl)
     });
