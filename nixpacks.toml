@@ -3,7 +3,7 @@
 
 [phases.setup]
 nixPkgs = [
-  "nodejs-18_x",
+  "nodejs-20_x",
   "cairo",
   "pango",
   "libpng",
