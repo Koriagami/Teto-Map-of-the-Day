@@ -1544,7 +1544,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
             
             if (i === 0) {
               // First score: full format
-              const playerStats = await formatPlayerStats(score);
+              // Enhance score object with beatmapData to ensure map stats are available
+              let enhancedScore = score;
+              if (beatmapData && score.beatmap) {
+                enhancedScore = {
+                  ...score,
+                  beatmap: {
+                    ...score.beatmap,
+                    cs: score.beatmap.cs ?? beatmapData.cs ?? beatmapData.circle_size ?? null,
+                    ar: score.beatmap.ar ?? beatmapData.ar ?? beatmapData.approach_rate ?? null,
+                    bpm: score.beatmap.bpm ?? beatmapData.bpm ?? null,
+                    accuracy: score.beatmap.accuracy ?? beatmapData.accuracy ?? beatmapData.overall_difficulty ?? null,
+                    drain: score.beatmap.drain ?? beatmapData.drain ?? beatmapData.hp ?? beatmapData.health ?? null,
+                    circle_size: score.beatmap.circle_size ?? beatmapData.circle_size ?? beatmapData.cs ?? null,
+                    approach_rate: score.beatmap.approach_rate ?? beatmapData.approach_rate ?? beatmapData.ar ?? null,
+                    overall_difficulty: score.beatmap.overall_difficulty ?? beatmapData.overall_difficulty ?? beatmapData.accuracy ?? null,
+                    hp: score.beatmap.hp ?? beatmapData.hp ?? beatmapData.drain ?? beatmapData.health ?? null,
+                    health: score.beatmap.health ?? beatmapData.health ?? beatmapData.drain ?? beatmapData.hp ?? null,
+                  }
+                };
+              }
+              const playerStats = await formatPlayerStats(enhancedScore);
               message += `**Score #${i + 1}**\n${playerStats}`;
             } else {
               // Subsequent scores: compact one-line format
@@ -1619,7 +1639,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
           
           if (i === 0) {
             // First score: full format
-            const playerStats = await formatPlayerStats(record.score);
+            // Enhance score object with beatmapData to ensure map stats are available
+            let enhancedScore = record.score;
+            if (beatmapData && record.score.beatmap) {
+              enhancedScore = {
+                ...record.score,
+                beatmap: {
+                  ...record.score.beatmap,
+                  cs: record.score.beatmap.cs ?? beatmapData.cs ?? beatmapData.circle_size ?? null,
+                  ar: record.score.beatmap.ar ?? beatmapData.ar ?? beatmapData.approach_rate ?? null,
+                  bpm: record.score.beatmap.bpm ?? beatmapData.bpm ?? null,
+                  accuracy: record.score.beatmap.accuracy ?? beatmapData.accuracy ?? beatmapData.overall_difficulty ?? null,
+                  drain: record.score.beatmap.drain ?? beatmapData.drain ?? beatmapData.hp ?? beatmapData.health ?? null,
+                  circle_size: record.score.beatmap.circle_size ?? beatmapData.circle_size ?? beatmapData.cs ?? null,
+                  approach_rate: record.score.beatmap.approach_rate ?? beatmapData.approach_rate ?? beatmapData.ar ?? null,
+                  overall_difficulty: record.score.beatmap.overall_difficulty ?? beatmapData.overall_difficulty ?? beatmapData.accuracy ?? null,
+                  hp: record.score.beatmap.hp ?? beatmapData.hp ?? beatmapData.drain ?? beatmapData.health ?? null,
+                  health: record.score.beatmap.health ?? beatmapData.health ?? beatmapData.drain ?? beatmapData.hp ?? null,
+                }
+              };
+            }
+            const playerStats = await formatPlayerStats(enhancedScore);
             message += `**Score #${i + 1}**\n${playerStats}`;
           } else {
             // Subsequent scores: compact one-line format
