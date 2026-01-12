@@ -154,19 +154,64 @@ async function getBeatmapScores(beatmapId, options = {}) {
 /**
  * Get user's recent scores
  * @param {string} userId - OSU user ID
- * @param {object} options - Optional parameters (mode, limit, etc.)
+ * @param {object} options - Optional parameters (mode, limit, offset, etc.)
  */
 async function getUserRecentScores(userId, options = {}) {
   const params = new URLSearchParams();
   
   if (options.mode) params.append('mode', options.mode);
   if (options.limit) params.append('limit', (options.limit || 1).toString());
+  if (options.offset !== undefined) params.append('offset', options.offset.toString());
   if (options.include_fails !== undefined) params.append('include_fails', options.include_fails ? '1' : '0');
 
   const queryString = params.toString();
   const endpoint = `/users/${userId}/scores/recent${queryString ? `?${queryString}` : ''}`;
 
   return apiRequest(endpoint);
+}
+
+/**
+ * Get all of a user's scores on a specific beatmap
+ * @param {string} beatmapId - The beatmap ID
+ * @param {string} userId - OSU user ID
+ * @param {object} options - Optional parameters (mode, ruleset, legacy_only, etc.)
+ * @returns {Promise<array>} Array of all user's scores for the beatmap
+ */
+async function getUserBeatmapScoresAll(beatmapId, userId, options = {}) {
+  const params = new URLSearchParams();
+  
+  if (options.mode) params.append('mode', options.mode);
+  if (options.ruleset) params.append('ruleset', options.ruleset);
+  if (options.legacy_only !== undefined) params.append('legacy_only', options.legacy_only ? '1' : '0');
+
+  const queryString = params.toString();
+  const userIdStr = String(userId);
+  const endpoint = `/beatmaps/${beatmapId}/scores/users/${userIdStr}/all${queryString ? `?${queryString}` : ''}`;
+
+  try {
+    const response = await apiRequest(endpoint);
+    
+    // The API returns an object with a 'scores' array
+    if (response && typeof response === 'object') {
+      if (Array.isArray(response)) {
+        return response;
+      }
+      if (response.scores && Array.isArray(response.scores)) {
+        return response.scores;
+      }
+      return [];
+    }
+    return [];
+  } catch (error) {
+    // If user has no scores for this beatmap, API returns 404
+    const errorMessage = error.message.toLowerCase();
+    if (errorMessage.includes('404') || 
+        errorMessage.includes('not found') || 
+        errorMessage.includes('no score')) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 /**
@@ -190,11 +235,6 @@ async function getUserBeatmapScore(beatmapId, userId, options = {}) {
 
   try {
     const response = await apiRequest(endpoint);
-    
-    // Log the raw response for debugging (only in development)
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[DEBUG] getUserBeatmapScore response for beatmap ${beatmapId}, user ${userIdStr}:`, JSON.stringify(response, null, 2));
-    }
     
     // The OSU API v2 returns the score object directly
     // But it might be wrapped in a 'score' property in some cases
@@ -255,5 +295,8 @@ async function getUser(user, options = {}) {
   }
 }
 
-export { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUser };
+export { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser };
+
+
+
 

@@ -288,6 +288,100 @@ export const activeChallenges = {
   },
 };
 
+// Local Score operations
+export const localScores = {
+  async create(guildId, discordUserId, osuUserId, score) {
+    // Check if this exact score already exists
+    const existing = await this.exists(guildId, discordUserId, score);
+    if (existing) {
+      return existing; // Return existing record instead of creating duplicate
+    }
+
+    return prisma.localScore.create({
+      data: {
+        guildId,
+        discordUserId,
+        osuUserId,
+        score,
+      },
+    });
+  },
+
+  async exists(guildId, discordUserId, score) {
+    // Get all scores for this user in this guild
+    const allScores = await prisma.localScore.findMany({
+      where: {
+        guildId,
+        discordUserId,
+      },
+    });
+
+    // Check if a score with the same beatmap ID, difficulty, and score value exists
+    const beatmapId = score.beatmap?.id?.toString();
+    const difficulty = score.beatmap?.version;
+    const scoreValue = score.score;
+
+    return allScores.find(record => {
+      const existingScore = record.score;
+      if (!existingScore || typeof existingScore !== 'object') return false;
+      
+      const existingBeatmapId = existingScore.beatmap?.id?.toString();
+      const existingDifficulty = existingScore.beatmap?.version;
+      const existingScoreValue = existingScore.score;
+      
+      return existingBeatmapId === beatmapId && 
+             existingDifficulty === difficulty && 
+             existingScoreValue === scoreValue;
+    }) || null;
+  },
+
+  async getByUser(guildId, discordUserId) {
+    return prisma.localScore.findMany({
+      where: {
+        guildId,
+        discordUserId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  },
+
+  async getByOsuUser(osuUserId) {
+    return prisma.localScore.findMany({
+      where: {
+        osuUserId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  },
+
+  async getByBeatmapAndDifficulty(guildId, discordUserId, beatmapId, difficulty) {
+    const allScores = await prisma.localScore.findMany({
+      where: {
+        guildId,
+        discordUserId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    // Filter by beatmap ID and difficulty (stored in JSON)
+    return allScores.filter(record => {
+      const score = record.score;
+      if (!score || typeof score !== 'object') return false;
+      
+      const scoreBeatmapId = score.beatmap?.id?.toString();
+      const scoreDifficulty = score.beatmap?.version;
+      
+      return scoreBeatmapId === beatmapId && scoreDifficulty === difficulty;
+    });
+  },
+};
+
 // Cleanup function for graceful shutdown
 export async function disconnect() {
   await prisma.$disconnect();
@@ -295,3 +389,6 @@ export async function disconnect() {
 
 // Export prisma client for advanced queries if needed
 export { prisma };
+
+
+

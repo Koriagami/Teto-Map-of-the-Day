@@ -7,12 +7,19 @@ Discord bot for submitting and voting on osu! maps.
 - `/teto setup` (admin) — Set operating channel
 - `/teto link <profile>` — Link Discord to OSU! profile
 - `/teto map submit <maplink> [mods]` — Submit map (once per day)
+- `/teto test <command>` (admin) — Test command UI (trs, tc, rsci, rscr, motd, report)
 - `/rsc [maplink]` — Issue or respond to score challenges
+- `/trs` — Record your unranked scores
+- `/tc` — Look up your scores for the map
 - `/test <maplink>` — Test OSU! API leaderboards
 - Auto reactions (👍/👎) with "meh" message on 4+ dislikes
 - PostgreSQL database with Prisma ORM
 
 ## Quick Setup
+
+- Click https://discord.com/oauth2/authorize?client_id=1447929535466049657&permissions=388160&integration_type=0&scope=bot+applications.commands
+
+## Selfhosting Setup (for Railway)
 
 1. **Environment Variables** (`.env`):
    ```env
@@ -21,6 +28,7 @@ Discord bot for submitting and voting on osu! maps.
    OSU_CLIENT_ID=your_osu_client_id
    OSU_CLIENT_SECRET=your_osu_secret
    DATABASE_URL=postgresql://...  # Auto-set on Railway
+   PARENT_GUILD_ID=your_parent_guild_id  # Optional: Guild ID where rank emojis are stored
    ```
 
 2. **Install & Run**:

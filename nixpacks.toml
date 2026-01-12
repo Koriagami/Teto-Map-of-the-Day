@@ -1,0 +1,35 @@
+# Nixpacks configuration for Railway deployment
+# Ensures canvas (node-canvas) system dependencies are installed
+
+providers = ["node"]
+
+[phases.setup]
+nixPkgs = [
+  "pkgs.nodejs",
+  "pkgs.python311",
+  "pkgs.gcc",
+  "pkgs.glibc",
+  "pkgs.pkg-config",
+  "pkgs.cairo",
+  "pkgs.pango",
+  "pkgs.glib",
+  "pkgs.libpng",
+  "pkgs.libjpeg",
+  "pkgs.giflib",
+  "pkgs.librsvg",
+  "pkgs.dejavu_fonts",
+  "pkgs.liberation_ttf"
+]
+
+[phases.install]
+cmds = [
+  "npm ci"
+]
+
+[phases.build]
+cmds = [
+  "npm run db:generate"
+]
+
+[start]
+cmd = "npm start"

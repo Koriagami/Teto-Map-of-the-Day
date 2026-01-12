@@ -68,3 +68,19 @@ model ActiveChallenge {
   @@index([beatmapId])
   @@map("active_challenges")
 }
+
+model LocalScore {
+  id            String   @id @default(uuid())
+  guildId       String
+  discordUserId String   // Discord user ID
+  osuUserId     String   // OSU user ID
+  score         Json     // Full score data from OSU API
+  createdAt     DateTime @default(now())
+
+  @@index([guildId, discordUserId])
+  @@index([osuUserId])
+  @@map("local_scores")
+}
+
+
+

@@ -33,8 +33,27 @@ const mapSubmit = new SlashCommandBuilder()
   )
   .addSubcommand(sub =>
     sub
-      .setName('get_c_report')
-      .setDescription('Generate and post the weekly challenges report (admin only)')
+      .setName('test')
+      .setDescription('Test command UI (admin only)')
+      .addStringOption(opt =>
+        opt
+          .setName('command')
+          .setDescription('Command to test')
+          .setRequired(true)
+          .addChoices(
+            { name: 'trs', value: 'trs' },
+            { name: 'tc', value: 'tc' },
+            { name: 'rsci', value: 'rsci' },
+            { name: 'rscr', value: 'rscr' },
+            { name: 'motd', value: 'motd' },
+            { name: 'report', value: 'report' }
+          )
+      )
+  )
+  .addSubcommand(sub =>
+    sub
+      .setName('help')
+      .setDescription('Show all available commands and their descriptions')
   )
   .addSubcommandGroup(group => {
     const g = group
@@ -74,4 +93,12 @@ const rscCommand = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-export const commands = [mapSubmit.toJSON(), rscCommand.toJSON()];
+const trsCommand = new SlashCommandBuilder()
+  .setName('trs')
+  .setDescription('Record your unranked scores');
+
+const tcCommand = new SlashCommandBuilder()
+  .setName('tc')
+  .setDescription('Look up your scores for the map');
+
+export const commands = [mapSubmit.toJSON(), rscCommand.toJSON(), trsCommand.toJSON(), tcCommand.toJSON()];
