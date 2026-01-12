@@ -475,6 +475,45 @@ async function getMapTitle(score) {
   return 'Unknown Map';
 }
 
+// Helper: get star rating from score/beatmap object
+async function getStarRating(scoreOrBeatmap) {
+  // Try to get from score.beatmap first
+  let starRating = scoreOrBeatmap?.beatmap?.difficulty_rating 
+    || scoreOrBeatmap?.beatmap?.stars
+    || scoreOrBeatmap?.difficulty_rating
+    || scoreOrBeatmap?.stars
+    || null;
+  
+  // If not found and we have a beatmap ID, fetch the beatmap
+  if (starRating === null && scoreOrBeatmap?.beatmap?.id) {
+    try {
+      const beatmap = await getBeatmap(scoreOrBeatmap.beatmap.id);
+      starRating = beatmap?.difficulty_rating || beatmap?.stars || null;
+    } catch (error) {
+      console.error('Error fetching beatmap for star rating:', error);
+    }
+  }
+  
+  return starRating;
+}
+
+// Helper: format difficulty label with star rating
+async function formatDifficultyLabel(mapTitle, difficulty, scoreOrBeatmap = null) {
+  let label = `${mapTitle} [${difficulty}]`;
+  
+  // Try to get star rating if score/beatmap is provided
+  if (scoreOrBeatmap) {
+    const starRating = await getStarRating(scoreOrBeatmap);
+    if (starRating !== null) {
+      // Format star rating to 2 decimal places
+      const starRatingFormatted = starRating.toFixed(2);
+      label = `:star: ${starRatingFormatted} ${label}`;
+    }
+  }
+  
+  return label;
+}
+
 // Helper: format player stats from score object
 async function formatPlayerStats(score) {
   // Safely extract score value - handle both number and object cases
@@ -884,7 +923,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (existingChallenge) {
           // Challenge exists, proceed to PART B
           const mapTitle = await getMapTitle(userScore);
-          const difficultyLabel = `${mapTitle} [${difficulty}]`;
+          const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
           await interaction.editReply({ 
             embeds: await createEmbed(`There is already an active challenge for **${difficultyLabel}**.\nORA ORA! WE ARE ENTERING THE COMPETITION!`)
           });
@@ -904,7 +943,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = await formatPlayerStats(userScore);
           const mapTitle = await getMapTitle(userScore);
-          const difficultyLabel = `${mapTitle} [${difficulty}]`;
+          const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
           const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
@@ -990,7 +1029,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const beatmapLink = formatBeatmapLink(userScore);
           const playerStats = await formatPlayerStats(userScore);
           const mapTitle = await getMapTitle(userScore);
-          const difficultyLabel = `${mapTitle} [${difficulty}]`;
+          const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
           
           const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
@@ -1040,7 +1079,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const beatmapLink = formatBeatmapLink(userScore);
         const playerStats = await formatPlayerStats(userScore);
         const mapTitle = await getMapTitle(userScore);
-        const difficultyLabel = `${mapTitle} [${difficulty}]`;
+        const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
         const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
         
         const challengeMessage = `<@${userId}> has issued a challenge for ${difficultyLink}!\n\nBeat the score below and use \`/rsc\` command to respond!\n\n${playerStats}`;
@@ -1125,7 +1164,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       // Get map title and format difficulty label with link
       const mapTitle = await getMapTitle(challengerScore);
-      const difficultyLabel = `${mapTitle} [${challengeDifficulty}]`;
+      const difficultyLabel = await formatDifficultyLabel(mapTitle, challengeDifficulty, challengerScore);
       const beatmapLink = formatBeatmapLink(challengerScore);
       const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
@@ -1286,7 +1325,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const playerStats = await formatPlayerStats(userScore);
       const mapTitle = await getMapTitle(userScore);
       const difficulty = userScore.beatmap.version;
-      const difficultyLabel = `${mapTitle} [${difficulty}]`;
+      const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
       const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
       // Check if score is saved on osu! servers
@@ -1453,7 +1492,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
             console.log(`[DEBUG /tc] Using first score data: mapTitle="${mapTitle}", beatmapLink="${beatmapLink}"`);
           }
           
-          const difficultyLabel = `${mapTitle} [${difficulty}]`;
+          // Use beatmapData if available, otherwise use first score for star rating
+          const scoreOrBeatmapForStarRating = beatmapData || sortedScores[0];
+          const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, scoreOrBeatmapForStarRating);
           const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
           // Build message with all scores
@@ -1525,7 +1566,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         }
         
-        const difficultyLabel = `${mapTitle} [${difficulty}]`;
+        // Use beatmapData if available, otherwise use first score for star rating
+        const scoreOrBeatmapForStarRating = beatmapData || sortedRecords[0].score;
+        const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, scoreOrBeatmapForStarRating);
         const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
         // Build message with all local scores
@@ -1849,11 +1892,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     let difficultyName = null;
     let difficultyLink = mapLink; // Fallback to original link if we can't get beatmap data
     let imageUrl = null;
+    let beatmap = null;
     
     try {
       const beatmapId = extractBeatmapId(mapLink);
       if (beatmapId) {
-        const beatmap = await getBeatmap(beatmapId);
+        beatmap = await getBeatmap(beatmapId);
         mapName = beatmap?.beatmapset?.title || beatmap?.beatmapset?.title_unicode || null;
         difficultyName = beatmap?.version || null;
         imageUrl = await getBeatmapsetImageUrl(beatmap);
@@ -1871,12 +1915,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // Continue with fallback link if there's an error
     }
 
-    // Format message with map name and difficulty as link
+    // Format message with map name and difficulty as link (with star rating)
     let difficultyLabel = null;
     if (mapName && difficultyName) {
-      difficultyLabel = `[${mapName} [${difficultyName}]](${difficultyLink})`;
+      const labelWithStar = await formatDifficultyLabel(mapName, difficultyName, beatmap);
+      difficultyLabel = `[${labelWithStar}](${difficultyLink})`;
     } else if (difficultyName) {
-      difficultyLabel = `[Unknown Map [${difficultyName}]](${difficultyLink})`;
+      const labelWithStar = await formatDifficultyLabel('Unknown Map', difficultyName, beatmap);
+      difficultyLabel = `[${labelWithStar}](${difficultyLink})`;
     } else {
       difficultyLabel = difficultyLink; // Fallback to plain link
     }
@@ -1951,6 +1997,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       let mapName = null;
       let difficultyName = null;
       let difficultyLink = null;
+      let beatmap = null;
       
       try {
         
@@ -1972,7 +2019,7 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
         if (mapLink) {
           const beatmapId = extractBeatmapId(mapLink);
           if (beatmapId) {
-            const beatmap = await getBeatmap(beatmapId);
+            beatmap = await getBeatmap(beatmapId);
             mapName = beatmap?.beatmapset?.title || beatmap?.beatmapset?.title_unicode || null;
             difficultyName = beatmap?.version || null;
             
@@ -1990,12 +2037,14 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
         // Continue without map/difficulty info if there's an error
       }
       
-      // Format message with map name and difficulty as link in parentheses
+      // Format message with map name and difficulty as link in parentheses (with star rating)
       let difficultyLabel = '';
       if (mapName && difficultyName && difficultyLink) {
-        difficultyLabel = `([${mapName} [${difficultyName}]](${difficultyLink}))`;
+        const labelWithStar = await formatDifficultyLabel(mapName, difficultyName, beatmap);
+        difficultyLabel = `([${labelWithStar}](${difficultyLink}))`;
       } else if (difficultyName && difficultyLink) {
-        difficultyLabel = `([Unknown Map [${difficultyName}]](${difficultyLink}))`;
+        const labelWithStar = await formatDifficultyLabel('Unknown Map', difficultyName, beatmap);
+        difficultyLabel = `([${labelWithStar}](${difficultyLink}))`;
       } else if (difficultyLink) {
         difficultyLabel = `(${difficultyLink})`;
       }
@@ -2027,7 +2076,7 @@ async function formatChallengeEntry(challenge) {
     }
     
     const mapTitle = await getMapTitle(score);
-    const difficultyLabel = `${mapTitle} [${challenge.difficulty}]`;
+    const difficultyLabel = await formatDifficultyLabel(mapTitle, challenge.difficulty, score);
     const beatmapLink = formatBeatmapLink(score);
     
     if (beatmapLink) {
@@ -2064,7 +2113,7 @@ async function formatChallengeEntryWithDays(challenge, timeHeld) {
     }
     
     const mapTitle = await getMapTitle(score);
-    const difficultyLabel = `${mapTitle} [${challenge.difficulty}]`;
+    const difficultyLabel = await formatDifficultyLabel(mapTitle, challenge.difficulty, score);
     const beatmapLink = formatBeatmapLink(score);
     
     // Format time held
