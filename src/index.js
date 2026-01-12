@@ -1380,14 +1380,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const difficultyLabel = await formatDifficultyLabel(mapTitle, difficulty, userScore);
       const difficultyLink = beatmapLink ? `[${difficultyLabel}](${beatmapLink})` : `**${difficultyLabel}**`;
 
+      // Check if score rank is F - if so, always save to local DB regardless of map type
+      const scoreRank = userScore.rank || 'N/A';
+      const isRankF = scoreRank === 'F' || scoreRank === 'f';
+      
       // Check if score is saved on osu! servers
       const isSaved = isScoreSavedOnOsu(beatmapStatus);
       let statusMessage = '';
 
-      if (isSaved) {
+      if (isSaved && !isRankF) {
+        // Score is saved on osu! servers and not F rank - don't save locally
         statusMessage = `\nThis map is **${beatmapStatusName}**. The score is saved on the OSU! servers.`;
       } else {
-        // Save to local database (only if not duplicate)
+        // Save to local database (if F rank, always save; otherwise only if not saved on osu!)
         try {
           const existing = await localScores.exists(guildId, userId, userScore);
           if (existing) {
@@ -1402,7 +1407,108 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
 
-      const message = `Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
+      // Fetch all scores for this beatmap from both API and local DB, then combine and display
+      const allScores = [];
+      
+      // Get API scores for this beatmap
+      try {
+        const apiScores = await getUserBeatmapScoresAll(beatmapId, osuUserId);
+        // All scores from getUserBeatmapScoresAll are for the same beatmap
+        // We need to filter by difficulty if we can determine it
+        let beatmapDifficulty = null;
+        try {
+          const beatmapData = await getBeatmap(beatmapId);
+          beatmapDifficulty = beatmapData.version;
+        } catch (error) {
+          console.error('Error fetching beatmap for difficulty:', error);
+        }
+        
+        // Filter API scores by difficulty if we can determine it
+        // Since all scores from getUserBeatmapScoresAll are for the same beatmap ID,
+        // we just need to verify they match the difficulty we're looking for
+        const matchingApiScores = beatmapDifficulty && beatmapDifficulty === difficulty 
+          ? apiScores  // All scores match since they're all for the same beatmap
+          : apiScores; // If we can't determine difficulty, include all (they're all for the same beatmap anyway)
+        
+        // Mark API scores
+        for (const score of matchingApiScores) {
+          allScores.push({ score, source: 'api', isLocal: false });
+        }
+      } catch (error) {
+        console.error('Error fetching API scores for /trs:', error);
+      }
+      
+      // Get local scores for this beatmap
+      try {
+        const localScoreRecords = await localScores.getByBeatmapAndDifficulty(guildId, userId, beatmapId, difficulty);
+        for (const record of localScoreRecords) {
+          allScores.push({ score: record.score, source: 'local', isLocal: true, createdAt: record.createdAt });
+        }
+      } catch (error) {
+        console.error('Error fetching local scores for /trs:', error);
+      }
+      
+      // Remove duplicates (same score value, same beatmap, same difficulty)
+      // Use a Set to track unique scores by beatmap ID + score value
+      const uniqueScores = [];
+      const seenScores = new Set();
+      for (const item of allScores) {
+        const scoreValue = item.score.score || 0;
+        const scoreBeatmapId = item.score.beatmap?.id?.toString();
+        const key = `${scoreBeatmapId}_${scoreValue}`;
+        if (!seenScores.has(key)) {
+          seenScores.add(key);
+          uniqueScores.push(item);
+        } else {
+          // If duplicate found, prefer API score over local
+          const existingIndex = uniqueScores.findIndex(s => {
+            const sKey = `${s.score.beatmap?.id?.toString()}_${s.score.score || 0}`;
+            return sKey === key;
+          });
+          if (existingIndex !== -1 && uniqueScores[existingIndex].isLocal && !item.isLocal) {
+            // Replace local with API if we have an API version
+            uniqueScores[existingIndex] = item;
+          }
+        }
+      }
+      
+      // Sort all scores by score value (highest first), then by source (API first for ties)
+      uniqueScores.sort((a, b) => {
+        const scoreA = a.score.score || 0;
+        const scoreB = b.score.score || 0;
+        if (scoreB !== scoreA) {
+          return scoreB - scoreA;
+        }
+        // If scores are equal, prefer API scores
+        return a.isLocal ? 1 : -1;
+      });
+      
+      // Limit to 8 scores
+      const sortedScores = uniqueScores.slice(0, 8);
+      
+      // Build message with all scores
+      let message = `Your most recent score on ${difficultyLink}:\n\n${playerStats}${statusMessage}`;
+      
+      // Always show combined scores if we have any (including the most recent one)
+      if (sortedScores.length > 0) {
+        message += `\n\n**All your scores on this difficulty:**\n\n`;
+        
+        // Get teto emoji for marking local scores
+        let tetoEmojiString = ':teto:';
+        if (tetoEmoji === null) {
+          await initializeEmojis();
+        }
+        if (tetoEmoji) {
+          tetoEmojiString = tetoEmoji.toString();
+        }
+        
+        for (let i = 0; i < sortedScores.length; i++) {
+          const { score, isLocal } = sortedScores[i];
+          const compactStats = await formatPlayerStatsCompact(score);
+          const tetoMarker = isLocal ? ` ${tetoEmojiString}` : '';
+          message += `**Score #${i + 1}**${tetoMarker}: ${compactStats}\n`;
+        }
+      }
 
       // Get beatmapset image URL for the embed
       const imageUrl = await getBeatmapsetImageUrl(userScore);
