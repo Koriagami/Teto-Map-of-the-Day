@@ -37,12 +37,12 @@ const AVATAR_MAX_RETRIES = 2;
 const IMAGE_QUALITY = 0.85; // JPEG quality (0-1), balance between size and quality
 
 // Layout constants
-const AVATAR_SIZE = 80;
+const AVATAR_SIZE = 120; // Increased from 80
 const AVATAR_Y = 20;
 const AVATAR_LEFT_X = 50;
 const AVATAR_RIGHT_X = CANVAS_WIDTH - 50 - AVATAR_SIZE;
-const MAP_NAME_Y = 120;
-const TABLE_START_Y = 180;
+const MAP_NAME_Y = 160; // Adjusted for larger avatars
+const TABLE_START_Y = 220; // Adjusted for larger avatars
 const ROW_HEIGHT = 60;
 const LABEL_COLUMN_X = CANVAS_WIDTH / 2 - 120;
 const LEFT_COLUMN_X = 50;
@@ -50,6 +50,12 @@ const RIGHT_COLUMN_X = CANVAS_WIDTH / 2 + 50;
 const BAR_WIDTH = 250;
 const BAR_HEIGHT = 20;
 const BAR_Y_OFFSET = 25;
+
+// Vertical divider margins
+const DIVIDER_TOP_MARGIN = 150; // Margin from top
+const DIVIDER_BOTTOM_MARGIN = 50; // Margin from bottom
+const STAT_LABEL_DIVIDER_TOP_MARGIN = 200; // Stat label divider starts lower
+const STAT_LABEL_DIVIDER_BOTTOM_MARGIN = 100; // Stat label divider ends higher
 
 /**
  * Timeout wrapper for async operations
@@ -186,23 +192,23 @@ export async function generateChallengeStatCard(
 }
 
 /**
- * Draw vertical dividers on the canvas
+ * Draw vertical dividers on the canvas with margins
  */
 function drawDividers(ctx) {
   ctx.strokeStyle = COLORS.divider;
   
-  // Main center divider (thicker)
-  ctx.lineWidth = 2;
+  // Main center divider (thicker, with top and bottom margins)
+  ctx.lineWidth = 3; // Made thicker for visibility
   ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH / 2, 0);
-  ctx.lineTo(CANVAS_WIDTH / 2, CANVAS_HEIGHT);
+  ctx.moveTo(CANVAS_WIDTH / 2, DIVIDER_TOP_MARGIN);
+  ctx.lineTo(CANVAS_WIDTH / 2, CANVAS_HEIGHT - DIVIDER_BOTTOM_MARGIN);
   ctx.stroke();
 
-  // Stat labels divider (thinner, offset left)
+  // Stat labels divider (thinner, shorter, offset left - more obvious length difference)
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(LABEL_COLUMN_X, 0);
-  ctx.lineTo(LABEL_COLUMN_X, CANVAS_HEIGHT);
+  ctx.moveTo(LABEL_COLUMN_X, STAT_LABEL_DIVIDER_TOP_MARGIN);
+  ctx.lineTo(LABEL_COLUMN_X, CANVAS_HEIGHT - STAT_LABEL_DIVIDER_BOTTOM_MARGIN);
   ctx.stroke();
 }
 
@@ -225,7 +231,8 @@ async function drawHeader(ctx, avatar1Url, avatar2Url, mapName, difficulty, resp
 
   // Draw map name (centered, orange) with truncation if too long
   ctx.fillStyle = COLORS.mapName;
-  ctx.font = 'bold 28px Arial';
+  // Use system font that's guaranteed to be available on Linux
+  ctx.font = 'bold 28px Sans';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   let mapText = `${mapName} [${difficulty}]`;
@@ -437,7 +444,8 @@ function drawStatTable(ctx, stats, challengerUsername, responderUsername, respon
 
     // Draw stat label (center, white)
     ctx.fillStyle = COLORS.label;
-    ctx.font = '20px Arial';
+    // Use system font that's guaranteed to be available on Linux
+    ctx.font = '20px Sans';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(label, LABEL_COLUMN_X, y + ROW_HEIGHT / 2);
@@ -491,7 +499,8 @@ function drawStatRow(ctx, x, y, value, formatFn, color, isWinner, barWidth, stat
   
   // Format and draw value text
   ctx.fillStyle = color;
-  ctx.font = 'bold 18px Arial';
+  // Use system font that's guaranteed to be available on Linux
+  ctx.font = 'bold 18px Sans';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   const formattedValue = formatFn(value);
