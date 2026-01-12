@@ -584,21 +584,40 @@ async function formatPlayerStats(score) {
   const countMiss = score.statistics?.count_miss || 0;
   
   // Get map stats (CS, AR, BPM, OD, HP) from beatmap
-  let cs = score.beatmap?.cs || score.beatmap?.circle_size || null;
-  let ar = score.beatmap?.ar || score.beatmap?.approach_rate || null;
-  let bpm = score.beatmap?.bpm || score.beatmap?.bpm || null;
-  let od = score.beatmap?.accuracy || score.beatmap?.overall_difficulty || null;
-  let hp = score.beatmap?.drain || score.beatmap?.hp || score.beatmap?.health || null;
+  let cs = score.beatmap?.cs ?? score.beatmap?.circle_size ?? null;
+  let ar = score.beatmap?.ar ?? score.beatmap?.approach_rate ?? null;
+  let bpm = score.beatmap?.bpm ?? null;
+  let od = score.beatmap?.accuracy ?? score.beatmap?.overall_difficulty ?? null;
+  let hp = score.beatmap?.drain ?? score.beatmap?.hp ?? score.beatmap?.health ?? null;
   
   // If map stats are not in score object, try to fetch beatmap
-  if ((cs === null || ar === null || bpm === null || od === null || hp === null) && score.beatmap?.id) {
+  // Check if any stat is missing (null or undefined)
+  const needsFetch = (cs === null || cs === undefined) || 
+                     (ar === null || ar === undefined) || 
+                     (bpm === null || bpm === undefined) || 
+                     (od === null || od === undefined) || 
+                     (hp === null || hp === undefined);
+  
+  if (needsFetch && score.beatmap?.id) {
     try {
       const beatmap = await getBeatmap(score.beatmap.id);
+      // Use nullish coalescing to only set if current value is null/undefined
       cs = cs ?? beatmap?.cs ?? beatmap?.circle_size ?? null;
       ar = ar ?? beatmap?.ar ?? beatmap?.approach_rate ?? null;
       bpm = bpm ?? beatmap?.bpm ?? null;
       od = od ?? beatmap?.accuracy ?? beatmap?.overall_difficulty ?? null;
       hp = hp ?? beatmap?.drain ?? beatmap?.hp ?? beatmap?.health ?? null;
+      
+      console.log(`[DEBUG formatPlayerStats] Fetched beatmap stats:`, {
+        cs, ar, bpm, od, hp,
+        beatmapKeys: Object.keys(beatmap),
+        hasCs: 'cs' in beatmap,
+        hasAr: 'ar' in beatmap,
+        hasBpm: 'bpm' in beatmap,
+        beatmapCs: beatmap?.cs,
+        beatmapAr: beatmap?.ar,
+        beatmapBpm: beatmap?.bpm
+      });
     } catch (error) {
       console.error('Error fetching beatmap for map stats:', error);
     }
@@ -1609,7 +1628,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
           console.log(`[DEBUG /tc] Beatmap data:`, {
             hasBeatmapset: !!beatmapData.beatmapset,
             beatmapsetTitle: beatmapData.beatmapset?.title,
-            beatmapsetId: beatmapData.beatmapset_id || beatmapData.beatmapset?.id
+            beatmapsetId: beatmapData.beatmapset_id || beatmapData.beatmapset?.id,
+            cs: beatmapData.cs,
+            ar: beatmapData.ar,
+            bpm: beatmapData.bpm,
+            accuracy: beatmapData.accuracy,
+            drain: beatmapData.drain,
+            circle_size: beatmapData.circle_size,
+            approach_rate: beatmapData.approach_rate,
+            overall_difficulty: beatmapData.overall_difficulty,
+            hp: beatmapData.hp,
+            health: beatmapData.health,
+            beatmapKeys: Object.keys(beatmapData)
           });
         } catch (error) {
           console.error(`[DEBUG /tc] Error fetching beatmap for difficulty:`, error);
@@ -1666,20 +1696,39 @@ client.on(Events.InteractionCreate, async (interaction) => {
               // Enhance score object with beatmapData to ensure map stats are available
               let enhancedScore = score;
               if (beatmapData && score.beatmap) {
+                // Extract map stats from beatmapData (osu! API v2 uses these property names)
+                const csValue = beatmapData.cs ?? beatmapData.circle_size ?? score.beatmap.cs ?? score.beatmap.circle_size ?? null;
+                const arValue = beatmapData.ar ?? beatmapData.approach_rate ?? score.beatmap.ar ?? score.beatmap.approach_rate ?? null;
+                const bpmValue = beatmapData.bpm ?? score.beatmap.bpm ?? null;
+                const odValue = beatmapData.accuracy ?? beatmapData.overall_difficulty ?? score.beatmap.accuracy ?? score.beatmap.overall_difficulty ?? null;
+                const hpValue = beatmapData.drain ?? beatmapData.hp ?? beatmapData.health ?? score.beatmap.drain ?? score.beatmap.hp ?? score.beatmap.health ?? null;
+                
+                console.log(`[DEBUG /tc] Map stats from beatmapData:`, {
+                  cs: csValue,
+                  ar: arValue,
+                  bpm: bpmValue,
+                  od: odValue,
+                  hp: hpValue,
+                  beatmapDataKeys: Object.keys(beatmapData),
+                  hasCs: 'cs' in beatmapData,
+                  hasAr: 'ar' in beatmapData,
+                  hasBpm: 'bpm' in beatmapData
+                });
+                
                 enhancedScore = {
                   ...score,
                   beatmap: {
                     ...score.beatmap,
-                    cs: score.beatmap.cs ?? beatmapData.cs ?? beatmapData.circle_size ?? null,
-                    ar: score.beatmap.ar ?? beatmapData.ar ?? beatmapData.approach_rate ?? null,
-                    bpm: score.beatmap.bpm ?? beatmapData.bpm ?? null,
-                    accuracy: score.beatmap.accuracy ?? beatmapData.accuracy ?? beatmapData.overall_difficulty ?? null,
-                    drain: score.beatmap.drain ?? beatmapData.drain ?? beatmapData.hp ?? beatmapData.health ?? null,
-                    circle_size: score.beatmap.circle_size ?? beatmapData.circle_size ?? beatmapData.cs ?? null,
-                    approach_rate: score.beatmap.approach_rate ?? beatmapData.approach_rate ?? beatmapData.ar ?? null,
-                    overall_difficulty: score.beatmap.overall_difficulty ?? beatmapData.overall_difficulty ?? beatmapData.accuracy ?? null,
-                    hp: score.beatmap.hp ?? beatmapData.hp ?? beatmapData.drain ?? beatmapData.health ?? null,
-                    health: score.beatmap.health ?? beatmapData.health ?? beatmapData.drain ?? beatmapData.hp ?? null,
+                    cs: csValue,
+                    ar: arValue,
+                    bpm: bpmValue,
+                    accuracy: odValue,
+                    overall_difficulty: odValue,
+                    drain: hpValue,
+                    hp: hpValue,
+                    health: hpValue,
+                    circle_size: csValue,
+                    approach_rate: arValue,
                   }
                 };
               }
@@ -1761,20 +1810,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
             // Enhance score object with beatmapData to ensure map stats are available
             let enhancedScore = record.score;
             if (beatmapData && record.score.beatmap) {
+              // Extract map stats from beatmapData (osu! API v2 uses these property names)
+              const csValue = beatmapData.cs ?? beatmapData.circle_size ?? record.score.beatmap.cs ?? record.score.beatmap.circle_size ?? null;
+              const arValue = beatmapData.ar ?? beatmapData.approach_rate ?? record.score.beatmap.ar ?? record.score.beatmap.approach_rate ?? null;
+              const bpmValue = beatmapData.bpm ?? record.score.beatmap.bpm ?? null;
+              const odValue = beatmapData.accuracy ?? beatmapData.overall_difficulty ?? record.score.beatmap.accuracy ?? record.score.beatmap.overall_difficulty ?? null;
+              const hpValue = beatmapData.drain ?? beatmapData.hp ?? beatmapData.health ?? record.score.beatmap.drain ?? record.score.beatmap.hp ?? record.score.beatmap.health ?? null;
+              
               enhancedScore = {
                 ...record.score,
                 beatmap: {
                   ...record.score.beatmap,
-                  cs: record.score.beatmap.cs ?? beatmapData.cs ?? beatmapData.circle_size ?? null,
-                  ar: record.score.beatmap.ar ?? beatmapData.ar ?? beatmapData.approach_rate ?? null,
-                  bpm: record.score.beatmap.bpm ?? beatmapData.bpm ?? null,
-                  accuracy: record.score.beatmap.accuracy ?? beatmapData.accuracy ?? beatmapData.overall_difficulty ?? null,
-                  drain: record.score.beatmap.drain ?? beatmapData.drain ?? beatmapData.hp ?? beatmapData.health ?? null,
-                  circle_size: record.score.beatmap.circle_size ?? beatmapData.circle_size ?? beatmapData.cs ?? null,
-                  approach_rate: record.score.beatmap.approach_rate ?? beatmapData.approach_rate ?? beatmapData.ar ?? null,
-                  overall_difficulty: record.score.beatmap.overall_difficulty ?? beatmapData.overall_difficulty ?? beatmapData.accuracy ?? null,
-                  hp: record.score.beatmap.hp ?? beatmapData.hp ?? beatmapData.drain ?? beatmapData.health ?? null,
-                  health: record.score.beatmap.health ?? beatmapData.health ?? beatmapData.drain ?? beatmapData.hp ?? null,
+                  cs: csValue,
+                  ar: arValue,
+                  bpm: bpmValue,
+                  accuracy: odValue,
+                  overall_difficulty: odValue,
+                  drain: hpValue,
+                  hp: hpValue,
+                  health: hpValue,
+                  circle_size: csValue,
+                  approach_rate: arValue,
                 }
               };
             }
