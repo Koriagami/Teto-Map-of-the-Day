@@ -92,32 +92,36 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 /**
- * Extract beatmap ID from osu.ppy.sh URL
+ * Extract beatmap ID (difficulty ID) from osu.ppy.sh URL
+ * Note: Beatmap ID is the ID of a specific difficulty, not the beatmapset ID
  * Supports formats like:
- * - https://osu.ppy.sh/beatmapsets/123#osu/456
- * - https://osu.ppy.sh/beatmaps/456
- * - https://osu.ppy.sh/b/456
+ * - https://osu.ppy.sh/beatmapsets/123#osu/456 (extracts 456 - the beatmap/difficulty ID)
+ * - https://osu.ppy.sh/beatmaps/456 (extracts 456 - the beatmap/difficulty ID)
+ * - https://osu.ppy.sh/b/456 (extracts 456 - the beatmap/difficulty ID)
  */
 function extractBeatmapId(url) {
-  // Try beatmapsets format: /beatmapsets/{set_id}#{mode}/{beatmap_id}
+  // Try beatmapsets format: /beatmapsets/{beatmapset_id}#{mode}/{beatmap_id}
+  // Extracts the beatmap ID (difficulty ID) from the fragment
   const beatmapsetsMatch = url.match(/beatmapsets\/\d+#\w+\/(\d+)/);
   if (beatmapsetsMatch) {
-    return beatmapsetsMatch[1];
+    return beatmapsetsMatch[1]; // Returns the beatmap ID (difficulty ID)
   }
 
-  // Try /beatmaps/{beatmap_id}
+  // Try /beatmaps/{beatmap_id} format
+  // This is the beatmap ID (difficulty ID)
   const beatmapsMatch = url.match(/beatmaps\/(\d+)/);
   if (beatmapsMatch) {
     return beatmapsMatch[1];
   }
 
   // Try /b/{beatmap_id} (short format: https://osu.ppy.sh/b/4362117)
+  // 4362117 is the beatmap ID (difficulty ID), not the beatmapset ID
   const bMatch = url.match(/osu\.ppy\.sh\/b\/(\d+)/);
   if (bMatch) {
     return bMatch[1];
   }
 
-  // If URL is just a number, assume it's a beatmap ID
+  // If URL is just a number, assume it's a beatmap ID (difficulty ID)
   const numberMatch = url.match(/^(\d+)$/);
   if (numberMatch) {
     return numberMatch[1];
@@ -128,6 +132,7 @@ function extractBeatmapId(url) {
 
 /**
  * Get beatmap information
+ * @param {string} beatmapId - The beatmap ID (difficulty ID), not the beatmapset ID
  */
 async function getBeatmap(beatmapId) {
   return apiRequest(`/beatmaps/${beatmapId}`);

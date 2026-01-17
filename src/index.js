@@ -876,8 +876,10 @@ function extractBeatmapInfoFromMessage(messageContent) {
       }
     }
     
-    if (beatmapId && difficulty) {
-      return { beatmapId, difficulty };
+    // Return beatmapId if found, even if difficulty is not found
+    // The caller can fetch the beatmap to get the difficulty if needed
+    if (beatmapId) {
+      return { beatmapId, difficulty: difficulty || null };
     }
   }
 
@@ -1702,7 +1704,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      const { beatmapId, difficulty } = beatmapInfo;
+      let { beatmapId, difficulty } = beatmapInfo;
+      let finalDifficulty = difficulty; // Will be updated if needed
 
       // Step 1: Check for API scores first
       // Use /beatmaps/{beatmap}/scores/users/{user}/all endpoint to get all user's scores for this beatmap
@@ -1718,13 +1721,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
         try {
           beatmapData = await getBeatmap(beatmapId);
           beatmapDifficulty = beatmapData.version;
+          // If difficulty wasn't found in message (e.g., from shortened link), use the one from beatmap
+          if (!difficulty && beatmapDifficulty) {
+            difficulty = beatmapDifficulty;
+            finalDifficulty = beatmapDifficulty;
+          }
         } catch (error) {
           // Continue without difficulty match
         }
         
         // Since all scores are for the same beatmap, if the difficulty matches, all scores match
-        // Compare extracted difficulty with beatmap difficulty
-        const matchingScores = (beatmapDifficulty && beatmapDifficulty === difficulty) ? allBeatmapScores : [];
+        // If difficulty is null or matches beatmapDifficulty, use all scores (they're all for the same beatmap)
+        const matchingScores = (!difficulty || !beatmapDifficulty || beatmapDifficulty === difficulty) ? allBeatmapScores : [];
 
         if (matchingScores.length > 0) {
           // Sort by score value (highest first) and limit to 8
@@ -1824,7 +1832,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       // Step 2: If not found in API, check local scores
-      const localScoreRecords = await localScores.getByBeatmapAndDifficulty(guildId, userId, beatmapId, difficulty);
+      // If difficulty is null (e.g., from shortened link), fetch it from beatmap
+      if (!finalDifficulty) {
+        try {
+          const beatmapData = await getBeatmap(beatmapId);
+          finalDifficulty = beatmapData.version;
+        } catch (error) {
+          // Continue without difficulty
+        }
+      }
+      const localScoreRecords = await localScores.getByBeatmapAndDifficulty(guildId, userId, beatmapId, finalDifficulty);
       
       if (localScoreRecords && localScoreRecords.length > 0) {
         // Sort by creation date (most recent first) and limit to 8
@@ -1862,8 +1879,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
         
         // Use beatmapData if available, otherwise use first score for star rating
+        // If we don't have beatmapData yet, try to fetch it to get difficulty
+        if (!beatmapData && finalDifficulty) {
+          try {
+            beatmapData = await getBeatmap(beatmapId);
+          } catch (error) {
+            // Continue without beatmapData
+          }
+        }
         const scoreOrBeatmapForStarRating = beatmapData || sortedRecords[0].score;
-        const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+        const difficultyLabel = formatDifficultyLabel(mapTitle, finalDifficulty || sortedRecords[0].score.beatmap?.version || 'Unknown');
         const starRatingText = await formatStarRating(scoreOrBeatmapForStarRating);
         const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
@@ -1921,10 +1946,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       // Step 3: No score found in either place
-        return interaction.editReply({ 
-          embeds: await createEmbed(`No score found for difficulty **${difficulty}** on this beatmap. Play it first!`),
-          ephemeral: true 
-        });
+      // Ensure we have difficulty for the message
+      let displayDifficulty = finalDifficulty || difficulty;
+      if (!displayDifficulty) {
+        try {
+          const beatmapData = await getBeatmap(beatmapId);
+          displayDifficulty = beatmapData.version;
+        } catch (error) {
+          displayDifficulty = 'this difficulty';
+        }
+      }
+      return interaction.editReply({ 
+        embeds: await createEmbed(`No score found for difficulty **${displayDifficulty}** on this beatmap. Play it first!`),
+        ephemeral: true 
+      });
 
     } catch (error) {
       console.error('Error in /tc command:', error);
