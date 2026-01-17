@@ -111,8 +111,8 @@ function extractBeatmapId(url) {
     return beatmapsMatch[1];
   }
 
-  // Try /b/{beatmap_id}
-  const bMatch = url.match(/\/b\/(\d+)/);
+  // Try /b/{beatmap_id} (short format: https://osu.ppy.sh/b/4362117)
+  const bMatch = url.match(/osu\.ppy\.sh\/b\/(\d+)/);
   if (bMatch) {
     return bMatch[1];
   }
