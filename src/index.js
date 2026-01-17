@@ -1982,18 +1982,49 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       // Step 3: No score found in either place
-      // Ensure we have difficulty for the message
-      let displayDifficulty = finalDifficulty || difficulty;
-      if (!displayDifficulty) {
-        try {
-          const beatmapData = await getBeatmap(beatmapId);
-          displayDifficulty = beatmapData.version;
-        } catch (error) {
-          displayDifficulty = 'this difficulty';
+      // Fetch beatmap data to format the error message with map name and difficulty as a link
+      let mapTitle = null;
+      let difficultyName = finalDifficulty || difficulty;
+      let beatmapLink = null;
+      let beatmapDataForError = null;
+      
+      try {
+        beatmapDataForError = await getBeatmap(beatmapId);
+        mapTitle = beatmapDataForError.beatmapset?.title || beatmapDataForError.beatmapset?.title_unicode || 'Unknown Map';
+        if (!difficultyName) {
+          difficultyName = beatmapDataForError.version;
         }
+        
+        // Construct beatmap link
+        const beatmapsetId = beatmapDataForError.beatmapset_id || beatmapDataForError.beatmapset?.id;
+        if (beatmapsetId && beatmapId) {
+          beatmapLink = `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${beatmapId}`;
+        } else if (beatmapId) {
+          beatmapLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
+        }
+      } catch (error) {
+        // Fallback if we can't fetch beatmap data
+        console.error('Error fetching beatmap data for error message:', error);
       }
+      
+      // Format the difficulty label as a clickable link
+      let difficultyLabel = null;
+      if (mapTitle && difficultyName && beatmapLink) {
+        const difficultyLabelText = formatDifficultyLabel(mapTitle, difficultyName);
+        const starRatingText = beatmapDataForError ? await formatStarRating(beatmapDataForError) : '';
+        difficultyLabel = `${starRatingText}[${difficultyLabelText}](${beatmapLink})`;
+      } else if (difficultyName && beatmapLink) {
+        const difficultyLabelText = formatDifficultyLabel('Unknown Map', difficultyName);
+        const starRatingText = beatmapDataForError ? await formatStarRating(beatmapDataForError) : '';
+        difficultyLabel = `${starRatingText}[${difficultyLabelText}](${beatmapLink})`;
+      } else if (difficultyName) {
+        difficultyLabel = `difficulty **${difficultyName}**`;
+      } else {
+        difficultyLabel = 'this difficulty';
+      }
+      
       return interaction.editReply({ 
-        embeds: await createEmbed(`No score found for difficulty **${displayDifficulty}** on this beatmap. Play it first!`),
+        embeds: await createEmbed(`No score found for ${difficultyLabel}. Play it first!`),
         ephemeral: true 
       });
 
