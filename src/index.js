@@ -1756,6 +1756,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       let { beatmapId, difficulty } = beatmapInfo;
       let finalDifficulty = difficulty; // Will be updated if needed
+      let beatmapData = null; // Declare outside try block so it's accessible for local scores section
 
       // Step 1: Check for API scores first
       // Use /beatmaps/{beatmap}/scores/users/{user}/all endpoint to get all user's scores for this beatmap
@@ -1767,22 +1768,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // We need to fetch the beatmap to get the difficulty name, or all scores are for the same beatmap
         // Since all scores are for the same beatmap ID, we can fetch the beatmap once to get the difficulty
         let beatmapDifficulty = null;
-        let beatmapData = null;
         try {
           beatmapData = await getBeatmap(beatmapId);
           beatmapDifficulty = beatmapData.version;
-          // If difficulty wasn't found in message (e.g., from shortened link), use the one from beatmap
-          if (!difficulty && beatmapDifficulty) {
-            difficulty = beatmapDifficulty;
+          // Always use difficulty from API as it's the source of truth
+          // This ensures consistency even if extracted difficulty from message doesn't match exactly
+          if (beatmapDifficulty) {
             finalDifficulty = beatmapDifficulty;
           }
         } catch (error) {
           // Continue without difficulty match
         }
         
-        // Since all scores are for the same beatmap, if the difficulty matches, all scores match
-        // If difficulty is null or matches beatmapDifficulty, use all scores (they're all for the same beatmap)
-        const matchingScores = (!difficulty || !beatmapDifficulty || beatmapDifficulty === difficulty) ? allBeatmapScores : [];
+        // All scores from getUserBeatmapScoresAll are already for the same beatmap ID (difficulty ID)
+        // So we should use ALL of them - no need to filter by difficulty name
+        // The difficulty name matching was causing issues when extracted difficulty didn't match exactly
+        const matchingScores = allBeatmapScores;
 
         if (matchingScores.length > 0) {
           // Sort by score value (highest first) and limit to 8
@@ -1812,7 +1813,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
           
           // Use beatmapData if available, otherwise use first score for star rating
           const scoreOrBeatmapForStarRating = beatmapData || sortedScores[0];
-          const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+          // Always use difficulty name from API (beatmapDifficulty) as it's the source of truth
+          // Fall back to difficulty from score if we don't have beatmapData
+          const displayDifficulty = beatmapDifficulty || sortedScores[0]?.beatmap?.version || difficulty || 'Unknown';
+          const difficultyLabel = formatDifficultyLabel(mapTitle, displayDifficulty);
           const starRatingText = await formatStarRating(scoreOrBeatmapForStarRating);
           const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
@@ -1882,14 +1886,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       // Step 2: If not found in API, check local scores
-      // If difficulty is null (e.g., from shortened link), fetch it from beatmap
-      if (!finalDifficulty) {
+      // Always fetch beatmap to get the correct difficulty name (source of truth)
+      // Don't rely on extracted difficulty from message as it might not match exactly
+      if (!beatmapData) {
         try {
-          const beatmapData = await getBeatmap(beatmapId);
+          beatmapData = await getBeatmap(beatmapId);
           finalDifficulty = beatmapData.version;
         } catch (error) {
-          // Continue without difficulty
+          // Continue without difficulty - will use extracted one as fallback
         }
+      } else {
+        // We already have beatmapData from API scores section, use its difficulty
+        finalDifficulty = beatmapData.version;
       }
       const localScoreRecords = await localScores.getByBeatmapAndDifficulty(guildId, userId, beatmapId, finalDifficulty);
       
