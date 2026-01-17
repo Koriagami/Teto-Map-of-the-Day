@@ -808,10 +808,24 @@ function extractBeatmapInfoFromMessage(messageContent) {
   foundLinks.sort((a, b) => a.linkStart - b.linkStart);
   
   // Step 2: Find the first link that is a beatmap difficulty link
+  // Only accept short format (/b/) or full beatmapset format (/beatmapsets/{set_id}#{mode}/{beatmap_id})
   for (const linkInfo of foundLinks) {
-    const beatmapId = extractBeatmapId(linkInfo.linkUrl);
+    const url = linkInfo.linkUrl;
+    
+    // Check if link is in the accepted formats for /tc
+    // Format 1: Short format - https://osu.ppy.sh/b/{beatmap_id}
+    const isShortFormat = /osu\.ppy\.sh\/b\/\d+/.test(url);
+    // Format 2: Full beatmapset format - https://osu.ppy.sh/beatmapsets/{set_id}#{mode}/{beatmap_id}
+    const isFullBeatmapsetFormat = /beatmapsets\/\d+#\w+\/\d+/.test(url);
+    
+    // Only process if it's one of the accepted formats
+    if (!isShortFormat && !isFullBeatmapsetFormat) {
+      continue; // Skip links that aren't in the accepted formats
+    }
+    
+    const beatmapId = extractBeatmapId(url);
     if (!beatmapId) {
-      continue; // Skip non-beatmap links
+      continue; // Skip if we can't extract beatmap ID
     }
     
     // Step 3: Extract difficulty from the link's context
