@@ -1998,16 +1998,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // Step 3: No score found in either place
       // Fetch beatmap data to format the error message with map name and difficulty as a link
       let mapTitle = null;
-      let difficultyName = finalDifficulty || difficulty;
+      let difficultyName = null;
       let beatmapLink = null;
       let beatmapDataForError = null;
       
       try {
         beatmapDataForError = await getBeatmap(beatmapId);
         mapTitle = beatmapDataForError.beatmapset?.title || beatmapDataForError.beatmapset?.title_unicode || 'Unknown Map';
-        if (!difficultyName) {
-          difficultyName = beatmapDataForError.version;
-        }
+        // Always use the difficulty name from the beatmap API (beatmapData.version) as it's the source of truth
+        // Don't use the extracted difficulty from the message as it might be incorrect (e.g., star rating)
+        difficultyName = beatmapDataForError.version;
         
         // Construct beatmap link
         const beatmapsetId = beatmapDataForError.beatmapset_id || beatmapDataForError.beatmapset?.id;
