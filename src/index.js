@@ -1682,14 +1682,50 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // Fetch last 20 messages from the channel
       const messages = await channel.messages.fetch({ limit: 20 });
       
-      // Search for difficulty link in messages (check both content and embed description)
+      // Search for difficulty link in messages (check content and all embed fields)
       let beatmapInfo = null;
       for (const [messageId, message] of messages) {
-        // Get text from message content or embed description (since messages are sent as embeds)
+        // Get text from message content
         let messageText = message.content || '';
-        if (message.embeds && message.embeds.length > 0 && message.embeds[0].description) {
-          messageText = (messageText + ' ' + message.embeds[0].description).trim();
+        
+        // Extract all text from all embeds (description, title, fields, footer, author, URL)
+        if (message.embeds && message.embeds.length > 0) {
+          for (const embed of message.embeds) {
+            // Add description
+            if (embed.description) {
+              messageText += ' ' + embed.description;
+            }
+            // Add title
+            if (embed.title) {
+              messageText += ' ' + embed.title;
+            }
+            // Add footer text
+            if (embed.footer?.text) {
+              messageText += ' ' + embed.footer.text;
+            }
+            // Add author name
+            if (embed.author?.name) {
+              messageText += ' ' + embed.author.name;
+            }
+            // Add embed URL (if the embed itself is a link)
+            if (embed.url) {
+              messageText += ' ' + embed.url;
+            }
+            // Add all field names and values
+            if (embed.fields && Array.isArray(embed.fields)) {
+              for (const field of embed.fields) {
+                if (field.name) {
+                  messageText += ' ' + field.name;
+                }
+                if (field.value) {
+                  messageText += ' ' + field.value;
+                }
+              }
+            }
+          }
         }
+        
+        messageText = messageText.trim();
         
         beatmapInfo = extractBeatmapInfoFromMessage(messageText);
         if (beatmapInfo) {
