@@ -110,8 +110,9 @@ const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) — darker blue for contrast, neon-style */
 const STAT_LINE_COLOR_LEFT = '#0284c7';
 const STAT_LINE_COLOR_RIGHT = '#f59e0b';
-/** White outline for stat values (replaces neon) */
+/** Dark grey outline for stat values (highlight) */
 const STAT_VALUE_OUTLINE_WIDTH = 2;
+const STAT_VALUE_OUTLINE_COLOR = '#2d2d2d';
 
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
 export const MAX_STAT_LINE_LENGTH = 200;
@@ -319,20 +320,25 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       const lineY = rowY + lineYOffset;
 
       ctx.font = `${labelFontSize}px ${CARD_FONT_FAMILY}`;
-      ctx.fillStyle = '#e5e5e5';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(stat.label, CENTER_X, lineY - nameAboveLine);
+      const labelY = lineY - nameAboveLine;
+      ctx.strokeStyle = STAT_VALUE_OUTLINE_COLOR;
+      ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(stat.label, CENTER_X, labelY);
+      ctx.fillStyle = '#e5e5e5';
+      ctx.fillText(stat.label, CENTER_X, labelY);
 
       if (stat.textOnly) {
-        // Mods: text only, placed closer to center — white outline on values
+        // Mods: text only, placed closer to center — dark grey outline on values
         const textLeft = stat.getText(play1);
         const textRight = stat.getText(play2);
         const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
         const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
         ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
-        ctx.strokeStyle = '#ffffff';
+        ctx.strokeStyle = STAT_VALUE_OUTLINE_COLOR;
         ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
         ctx.lineJoin = 'round';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
@@ -363,7 +369,7 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
 
         ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
-        ctx.strokeStyle = '#ffffff';
+        ctx.strokeStyle = STAT_VALUE_OUTLINE_COLOR;
         ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
         ctx.lineJoin = 'round';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
