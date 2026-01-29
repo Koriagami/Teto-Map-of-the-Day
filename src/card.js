@@ -89,7 +89,7 @@ const AVATAR_SIZE = 120;
 const AVATAR_BORDER_WIDTH = 3;
 const AVATAR_BORDER_COLOR = '#ffffff';
 /** Half-transparent grey mask over loser avatar */
-const LOSER_MASK_COLOR = 'rgba(80, 80, 80, 0.55)';
+const LOSER_MASK_COLOR = 'rgba(80, 80, 80, 0.72)';
 /** Winning stat row: draw winning side line thicker (values are not highlighted) */
 const WINNING_STAT_LINE_WIDTH_MULTIPLIER = 1.6;
 const AVATAR_TOP_MARGIN = 20;

@@ -1145,12 +1145,11 @@ async function testRscRespondCommand(interaction, guildId) {
     const cardBuffer = await drawChallengeCard(leftUser, rightUser, challengerScore, responderScore, statWinners, loserSide);
     const cardAttachment = new AttachmentBuilder(cardBuffer, { name: 'challenge-card.png' });
 
-    const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const statusMessage = responderWon
       ? `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`
       : `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
-    const messageBeforeImage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
-    const messageAfterImage = `${statusMessage}\n${separator}`;
+    const messageBeforeImage = `**[TEST MODE]**\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
+    const messageAfterImage = `${statusMessage}`;
 
     const embed1 = new EmbedBuilder()
       .setColor(BOT_EMBED_COLOR)
@@ -1642,7 +1641,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const cardBuffer = await drawChallengeCard(leftUser, rightUser, challengerScore, responderScore, statWinners, loserSide);
       const cardAttachment = new AttachmentBuilder(cardBuffer, { name: 'challenge-card.png' });
 
-      const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
       let statusMessage = '';
       if (responderWon) {
         statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
@@ -1650,8 +1648,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
       }
 
-      const messageBeforeImage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
-      const messageAfterImage = `\n\n${statusMessage}\n${separator}`;
+      const messageBeforeImage = `<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
+      const messageAfterImage = `\n\n${statusMessage}`;
 
       const embed1 = new EmbedBuilder()
         .setColor(BOT_EMBED_COLOR)
@@ -2808,8 +2806,6 @@ async function generateWeeklyUpdate(guildId) {
       return null; // No content to show
     }
 
-    // Build final message with separators
-    const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
     const header = await formatTetoText('**TETO WEEKLY UPDATE!**\n\n');
     const content = sections.join('\n');
     
