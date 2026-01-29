@@ -84,9 +84,11 @@ async function loadBackgroundImage() {
   }
 }
 
-/** Avatar size (diameter when drawn as circle) at center top — 25% bigger than original 80px */
+/** Avatar size (diameter when drawn as circle) at center top */
 const AVATAR_SIZE = 100;
 const AVATAR_TOP_MARGIN = 20;
+/** Horizontal offset of each avatar center from the card center (left = center - offset, right = center + offset) */
+const AVATAR_OFFSET_FROM_CENTER = 130;
 const USERNAME_MARGIN_TOP = 8;
 const USERNAME_FONT_SIZE = 18;
 
@@ -203,19 +205,27 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       console.warn('[card] Failed to load placeholder pfp:', e.message);
     }
   }
-  const avatarX = (CARD_WIDTH - AVATAR_SIZE) / 2;
   const avatarY = AVATAR_TOP_MARGIN;
+  const avatarCenterLeft = CENTER_X - AVATAR_OFFSET_FROM_CENTER;
+  const avatarCenterRight = CENTER_X + AVATAR_OFFSET_FROM_CENTER;
+  const avatarXLeft = avatarCenterLeft - AVATAR_SIZE / 2;
+  const avatarXRight = avatarCenterRight - AVATAR_SIZE / 2;
+
   if (avatarImage) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(avatarX + AVATAR_SIZE / 2, avatarY + AVATAR_SIZE / 2, AVATAR_SIZE / 2, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(avatarImage, avatarX, avatarY, AVATAR_SIZE, AVATAR_SIZE);
-    ctx.restore();
+    const drawAvatarAt = (x) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x + AVATAR_SIZE / 2, avatarY + AVATAR_SIZE / 2, AVATAR_SIZE / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(avatarImage, x, avatarY, AVATAR_SIZE, AVATAR_SIZE);
+      ctx.restore();
+    };
+    drawAvatarAt(avatarXLeft);
+    drawAvatarAt(avatarXRight);
   }
 
-  // Osu! username under the profile picture — always show a label when we have one; make it visible on any background
+  // Osu! username under each profile picture — same vertical position for both
   let statsStartY = avatarY + AVATAR_SIZE + USERNAME_MARGIN_TOP;
   const displayName = (username && String(username).trim()) ? String(username).trim() : null;
   if (displayName) {
@@ -223,15 +233,15 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
     ctx.font = `bold ${USERNAME_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const nameX = CARD_WIDTH / 2;
-    const nameY = statsStartY;
-    // Dark outline so white text is readable on light backgrounds (e.g. bubly_bg)
     ctx.strokeStyle = 'rgba(0,0,0,0.85)';
     ctx.lineWidth = 3;
     ctx.lineJoin = 'round';
-    ctx.strokeText(displayName, nameX, nameY);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(displayName, nameX, nameY);
+    const nameY = statsStartY;
+    ctx.strokeText(displayName, avatarCenterLeft, nameY);
+    ctx.fillText(displayName, avatarCenterLeft, nameY);
+    ctx.strokeText(displayName, avatarCenterRight, nameY);
+    ctx.fillText(displayName, avatarCenterRight, nameY);
     ctx.restore();
     statsStartY += USERNAME_FONT_SIZE;
   }
