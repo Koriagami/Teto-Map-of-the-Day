@@ -57,7 +57,7 @@ registerCardFont();
 
 /** Card dimensions */
 export const CARD_WIDTH = 600;
-export const CARD_HEIGHT = 1000;
+export const CARD_HEIGHT = 800;
 
 /** Default background fill when no image is found (dark gray) */
 const FALLBACK_BG_COLOR = '#1a1a1a';
@@ -110,7 +110,7 @@ const STAT_LINE_COLOR_LEFT = '#7dd3fc';
 const STAT_LINE_COLOR_RIGHT = '#fbbf24';
 
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
-export const MAX_STAT_LINE_LENGTH = 240;
+export const MAX_STAT_LINE_LENGTH = 200;
 
 /**
  * Calculate proportional line lengths for two stat values so they share a common scale.
@@ -118,7 +118,7 @@ export const MAX_STAT_LINE_LENGTH = 240;
  * (scale = 100% = max length), then returns both lengths in proportion.
  * @param {number} value1 - First stat value
  * @param {number} value2 - Second stat value
- * @param {number} [maxLength=MAX_STAT_LINE_LENGTH] - Max line length in px (default 240)
+ * @param {number} [maxLength=MAX_STAT_LINE_LENGTH] - Max line length in px (default 200)
  * @returns {{ length1: number, length2: number, scaleValue: number }}
  * @example
  */
@@ -164,11 +164,15 @@ function formatMods(play) {
 }
 
 /**
- * Stat definitions: same order as challenge response (PP, Accuracy, Max Combo, Score, Misses, 300s, 100s, 50s, Mods).
+ * Stat definitions: Mods first (text only), then PP, Accuracy, Max Combo, Score, Misses, 300s, 100s, 50s.
  * Play object: score, pp, accuracy (0–1), max_combo, statistics: { count_300, count_100, count_50, count_miss }, mods.
- * Use textOnly + getText for Mods (no bar comparison).
  */
 const STAT_DEFS = [
+  {
+    label: 'Mods',
+    textOnly: true,
+    getText: (p) => formatMods(p),
+  },
   { label: 'PP', getValue: (p) => p.pp ?? 0, format: (v) => String(Number(v).toFixed(1)) },
   {
     label: 'Accuracy %',
@@ -200,11 +204,6 @@ const STAT_DEFS = [
     label: '50s',
     getValue: (p) => p.statistics?.count_50 ?? 0,
     format: (v) => String(Math.round(v)),
-  },
-  {
-    label: 'Mods',
-    textOnly: true,
-    getText: (p) => formatMods(p),
   },
 ];
 
