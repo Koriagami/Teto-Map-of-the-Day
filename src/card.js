@@ -42,6 +42,36 @@ const AVATAR_TOP_MARGIN = 20;
 const USERNAME_MARGIN_TOP = 8;
 const USERNAME_FONT_SIZE = 18;
 
+/** Maximum length (px) of a stat line when it represents 100% of the scale */
+export const MAX_STAT_LINE_LENGTH = 200;
+
+/**
+ * Calculate proportional line lengths for two stat values so they share a common scale.
+ * Picks the bigger value (first if equal), sets scale to one magnitude above that value
+ * (scale = 100% = max length), then returns both lengths in proportion.
+ * @param {number} value1 - First stat value
+ * @param {number} value2 - Second stat value
+ * @param {number} [maxLength=MAX_STAT_LINE_LENGTH] - Max line length in px (default 200)
+ * @returns {{ length1: number, length2: number, scaleValue: number }}
+ * @example
+ */
+export function calculateStatScale(value1, value2, maxLength = MAX_STAT_LINE_LENGTH) {
+  const bigger = value1 >= value2 ? value1 : value2;
+
+  let scaleValue;
+  if (bigger <= 0 || !Number.isFinite(bigger)) {
+    scaleValue = 100;
+  } else {
+    const exponent = Math.floor(Math.log10(bigger));
+    scaleValue = Math.pow(10, exponent + 1);
+  }
+
+  const length1 = Math.min((value1 * maxLength) / scaleValue, maxLength);
+  const length2 = Math.min((value2 * maxLength) / scaleValue, maxLength);
+
+  return { length1, length2, scaleValue };
+}
+
 /**
  * Draw the card prototype: background (image or solid) + optional avatar at center top + username + a line.
  * @param {Buffer | null} [avatarBuffer] - Optional osu! profile picture image bytes
