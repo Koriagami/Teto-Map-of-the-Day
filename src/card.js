@@ -56,8 +56,8 @@ function registerCardFont() {
 registerCardFont();
 
 /** Card dimensions */
-export const CARD_WIDTH = 650;
-export const CARD_HEIGHT = 600;
+export const CARD_WIDTH = 600;
+export const CARD_HEIGHT = 1000;
 
 /** Default background fill when no image is found (dark gray) */
 const FALLBACK_BG_COLOR = '#1a1a1a';
@@ -92,22 +92,25 @@ const AVATAR_OFFSET_FROM_CENTER = 130;
 const USERNAME_MARGIN_TOP = 8;
 const USERNAME_FONT_SIZE = 18;
 
-/** Stats section under username */
+/** Stats section under username — base values; scaled at draw time to fill card height */
 const STATS_MARGIN_TOP = 16;
-const STAT_ROW_HEIGHT = 34; // enough for label + line + value (increased for larger font)
-const STAT_LINE_Y_OFFSET = 12; // vertical offset of line within row (below stat name)
-const STAT_NAME_ABOVE_LINE = 4; // stat name sits this many px above the line
-const STAT_LABEL_FONT_SIZE = 16; // larger so stat names are visible
-const STAT_VALUE_FONT_SIZE = 14; // larger so compared values are visible
-const STAT_VALUE_MARGIN = 6; // gap between line end and value text
-const STAT_LINE_STROKE_WIDTH = 6;
+const STAT_ROW_HEIGHT_BASE = 34;
+const STAT_LINE_Y_OFFSET_BASE = 12;
+const STAT_NAME_ABOVE_LINE_BASE = 4;
+const STAT_LABEL_FONT_SIZE_BASE = 16;
+const STAT_VALUE_FONT_SIZE_BASE = 14;
+const STAT_VALUE_MARGIN_BASE = 6;
+const STAT_LINE_STROKE_WIDTH_BASE = 6;
+const STATS_BOTTOM_MARGIN = 24;
+/** Mods text: horizontal offset from center (closer than bar ends) */
+const MODS_TEXT_OFFSET_FROM_CENTER = 90;
 const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) */
 const STAT_LINE_COLOR_LEFT = '#7dd3fc';
 const STAT_LINE_COLOR_RIGHT = '#fbbf24';
 
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
-export const MAX_STAT_LINE_LENGTH = 200;
+export const MAX_STAT_LINE_LENGTH = 240;
 
 /**
  * Calculate proportional line lengths for two stat values so they share a common scale.
@@ -115,7 +118,7 @@ export const MAX_STAT_LINE_LENGTH = 200;
  * (scale = 100% = max length), then returns both lengths in proportion.
  * @param {number} value1 - First stat value
  * @param {number} value2 - Second stat value
- * @param {number} [maxLength=MAX_STAT_LINE_LENGTH] - Max line length in px (default 200)
+ * @param {number} [maxLength=MAX_STAT_LINE_LENGTH] - Max line length in px (default 240)
  * @returns {{ length1: number, length2: number, scaleValue: number }}
  * @example
  */
@@ -282,30 +285,39 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
   }
   statsStartY += STATS_MARGIN_TOP;
 
-  // Stat lines: vertical center axis as start; score1 left, score2 right
+  // Stat lines: fill bottom of card; scale row height, fonts, and line thickness proportionally
   const play1 = recentScores?.[0];
   const play2 = recentScores?.[1];
   if (play1 && play2) {
+    const statsAreaHeight = CARD_HEIGHT - statsStartY - STATS_BOTTOM_MARGIN;
+    const rowHeight = statsAreaHeight / STAT_DEFS.length;
+    const scale = rowHeight / STAT_ROW_HEIGHT_BASE;
+    const labelFontSize = Math.round(STAT_LABEL_FONT_SIZE_BASE * scale);
+    const valueFontSize = Math.round(STAT_VALUE_FONT_SIZE_BASE * scale);
+    const lineStrokeWidth = Math.max(2, Math.round(STAT_LINE_STROKE_WIDTH_BASE * scale));
+    const lineYOffset = STAT_LINE_Y_OFFSET_BASE * scale;
+    const nameAboveLine = STAT_NAME_ABOVE_LINE_BASE * scale;
+    const valueMargin = STAT_VALUE_MARGIN_BASE * scale;
+
     ctx.save();
     for (let i = 0; i < STAT_DEFS.length; i++) {
       const stat = STAT_DEFS[i];
-      const rowY = statsStartY + i * STAT_ROW_HEIGHT;
-      const lineY = rowY + STAT_LINE_Y_OFFSET;
+      const rowY = statsStartY + i * rowHeight;
+      const lineY = rowY + lineYOffset;
 
-      // Stat name at center, slightly above the line
-      ctx.font = `${STAT_LABEL_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
+      ctx.font = `${labelFontSize}px ${CARD_FONT_FAMILY}`;
       ctx.fillStyle = '#e5e5e5';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(stat.label, CENTER_X, lineY - STAT_NAME_ABOVE_LINE);
+      ctx.fillText(stat.label, CENTER_X, lineY - nameAboveLine);
 
       if (stat.textOnly) {
-        // Mods (and any text-only stat): no bars, just left and right text
+        // Mods: text only, placed closer to center
         const textLeft = stat.getText(play1);
         const textRight = stat.getText(play2);
-        const textXLeft = CENTER_X - MAX_STAT_LINE_LENGTH - STAT_VALUE_MARGIN;
-        const textXRight = CENTER_X + MAX_STAT_LINE_LENGTH + STAT_VALUE_MARGIN;
-        ctx.font = `${STAT_VALUE_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
+        const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
+        const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
+        ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
@@ -319,7 +331,7 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
         const { length1, length2 } = calculateStatScale(value1, value2);
 
         ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
-        ctx.lineWidth = STAT_LINE_STROKE_WIDTH;
+        ctx.lineWidth = lineStrokeWidth;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X - length1, lineY);
@@ -331,15 +343,15 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
         ctx.lineTo(CENTER_X + length2, lineY);
         ctx.stroke();
 
-        ctx.font = `${STAT_VALUE_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
-        ctx.fillText(stat.format(value1), CENTER_X - length1 - STAT_VALUE_MARGIN, lineY);
+        ctx.fillText(stat.format(value1), CENTER_X - length1 - valueMargin, lineY);
 
         ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
         ctx.textAlign = 'left';
-        ctx.fillText(stat.format(value2), CENTER_X + length2 + STAT_VALUE_MARGIN, lineY);
+        ctx.fillText(stat.format(value2), CENTER_X + length2 + valueMargin, lineY);
       }
     }
     ctx.restore();
