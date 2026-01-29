@@ -88,6 +88,10 @@ async function loadBackgroundImage() {
 const AVATAR_SIZE = 120;
 const AVATAR_BORDER_WIDTH = 3;
 const AVATAR_BORDER_COLOR = '#ffffff';
+/** Half-transparent grey mask over loser avatar */
+const LOSER_MASK_COLOR = 'rgba(80, 80, 80, 0.55)';
+/** Winning stat row: draw winning side line thicker */
+const WINNING_STAT_LINE_WIDTH_MULTIPLIER = 1.6;
 const AVATAR_TOP_MARGIN = 20;
 /** Horizontal offset of each avatar center from the card center (left = center - offset, right = center + offset) */
 const AVATAR_OFFSET_FROM_CENTER = 130;
@@ -214,13 +218,39 @@ const STAT_DEFS = [
 ];
 
 /**
- * Draw the card prototype: background + avatar + username + stat lines (2 most recent plays).
- * @param {Buffer | null} [avatarBuffer] - Optional osu! profile picture image bytes
- * @param {string} [username] - Optional osu! username to draw under the avatar
- * @param {[object, object]} [recentScores] - Optional [play1, play2] for stats (score, pp, accuracy, max_combo, statistics, mods)
+ * Load avatar image from buffer or placeholder.
+ * @param {Buffer | null} avatarBuffer
+ * @returns {Promise<import('@napi-rs/canvas').Image | null>}
+ */
+async function loadAvatarImage(avatarBuffer) {
+  if (avatarBuffer && avatarBuffer.length > 0) {
+    try {
+      return await loadImage(avatarBuffer);
+    } catch (e) {
+      console.warn('[card] Failed to load avatar buffer:', e.message);
+    }
+  }
+  if (fs.existsSync(PLACEHOLDER_PFP_PATH)) {
+    try {
+      return await loadImage(PLACEHOLDER_PFP_PATH);
+    } catch (e) {
+      console.warn('[card] Failed to load placeholder pfp:', e.message);
+    }
+  }
+  return null;
+}
+
+/**
+ * Draw challenge/compare card (internal). Left = champion, right = responder.
+ * @param {object} leftUser - { avatarBuffer: Buffer|null, username: string }
+ * @param {object} rightUser - { avatarBuffer: Buffer|null, username: string }
+ * @param {[object, object]} scores - [championScore, responderScore]
+ * @param {('left'|'right'|'tie')[]} statWinners - per-row winner (length 9), optional; default all 'tie'
+ * @param {'left'|'right'|null} loserSide - which avatar gets grey mask (null = none)
  * @returns {Promise<Buffer>} PNG buffer
  */
-export async function drawCardPrototype(avatarBuffer = null, username = '', recentScores = null) {
+async function drawCardInternal(leftUser, rightUser, scores, statWinners = null, loserSide = null) {
+  const winners = statWinners || STAT_DEFS.map(() => 'tie');
   const canvas = createCanvas(CARD_WIDTH, CARD_HEIGHT);
   const ctx = canvas.getContext('2d');
 
@@ -232,77 +262,80 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
     ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
   }
 
-  // Center top: osu! profile picture or placeholder (circular)
-  let avatarImage = null;
-  if (avatarBuffer && avatarBuffer.length > 0) {
-    try {
-      avatarImage = await loadImage(avatarBuffer);
-    } catch (e) {
-      console.warn('[card] Failed to load avatar buffer:', e.message);
-    }
-  }
-  if (!avatarImage && fs.existsSync(PLACEHOLDER_PFP_PATH)) {
-    try {
-      avatarImage = await loadImage(PLACEHOLDER_PFP_PATH);
-    } catch (e) {
-      console.warn('[card] Failed to load placeholder pfp:', e.message);
-    }
-  }
   const avatarY = AVATAR_TOP_MARGIN;
   const avatarCenterLeft = CENTER_X - AVATAR_OFFSET_FROM_CENTER;
   const avatarCenterRight = CENTER_X + AVATAR_OFFSET_FROM_CENTER;
   const avatarXLeft = avatarCenterLeft - AVATAR_SIZE / 2;
   const avatarXRight = avatarCenterRight - AVATAR_SIZE / 2;
+  const avatarCx = (x) => x + AVATAR_SIZE / 2;
+  const avatarCy = () => avatarY + AVATAR_SIZE / 2;
+  const avatarRadius = AVATAR_SIZE / 2;
 
-  if (avatarImage) {
-    const avatarCx = (x) => x + AVATAR_SIZE / 2;
-    const avatarCy = () => avatarY + AVATAR_SIZE / 2;
-    const avatarRadius = AVATAR_SIZE / 2;
-    const drawAvatarAt = (x) => {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(avatarCx(x), avatarCy(), avatarRadius, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(avatarImage, x, avatarY, AVATAR_SIZE, AVATAR_SIZE);
-      ctx.restore();
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(avatarCx(x), avatarCy(), avatarRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = AVATAR_BORDER_COLOR;
-      ctx.lineWidth = AVATAR_BORDER_WIDTH;
-      ctx.stroke();
-      ctx.restore();
-    };
-    drawAvatarAt(avatarXLeft);
-    drawAvatarAt(avatarXRight);
-  }
+  const leftAvatarImage = await loadAvatarImage(leftUser?.avatarBuffer ?? null);
+  const rightAvatarImage = await loadAvatarImage(rightUser?.avatarBuffer ?? null);
 
-  // Osu! username under each profile picture — same vertical position for both
-  let statsStartY = avatarY + AVATAR_SIZE + USERNAME_MARGIN_TOP;
-  const displayName = (username && String(username).trim()) ? String(username).trim() : null;
-  if (displayName) {
+  const drawOneAvatar = (img, x) => {
+    if (!img) return;
     ctx.save();
-    ctx.font = `bold ${USERNAME_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-    ctx.lineWidth = 3;
-    ctx.lineJoin = 'round';
-    ctx.fillStyle = '#ffffff';
-    const nameY = statsStartY;
-    ctx.strokeText(displayName, avatarCenterLeft, nameY);
-    ctx.fillText(displayName, avatarCenterLeft, nameY);
-    ctx.strokeText(displayName, avatarCenterRight, nameY);
-    ctx.fillText(displayName, avatarCenterRight, nameY);
+    ctx.beginPath();
+    ctx.arc(avatarCx(x), avatarCy(), avatarRadius, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(img, x, avatarY, AVATAR_SIZE, AVATAR_SIZE);
     ctx.restore();
-    statsStartY += USERNAME_FONT_SIZE;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarCx(x), avatarCy(), avatarRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = AVATAR_BORDER_COLOR;
+    ctx.lineWidth = AVATAR_BORDER_WIDTH;
+    ctx.stroke();
+    ctx.restore();
+  };
+  drawOneAvatar(leftAvatarImage, avatarXLeft);
+  drawOneAvatar(rightAvatarImage, avatarXRight);
+
+  if (loserSide === 'left') {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarCx(avatarXLeft), avatarCy(), avatarRadius, 0, Math.PI * 2);
+    ctx.fillStyle = LOSER_MASK_COLOR;
+    ctx.fill();
+    ctx.restore();
+  } else if (loserSide === 'right') {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarCx(avatarXRight), avatarCy(), avatarRadius, 0, Math.PI * 2);
+    ctx.fillStyle = LOSER_MASK_COLOR;
+    ctx.fill();
+    ctx.restore();
   }
+
+  let statsStartY = avatarY + AVATAR_SIZE + USERNAME_MARGIN_TOP;
+  const leftName = (leftUser?.username && String(leftUser.username).trim()) ? String(leftUser.username).trim() : null;
+  const rightName = (rightUser?.username && String(rightUser.username).trim()) ? String(rightUser.username).trim() : null;
+  ctx.save();
+  ctx.font = `bold ${USERNAME_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.fillStyle = '#ffffff';
+  const nameY = statsStartY;
+  if (leftName) {
+    ctx.strokeText(leftName, avatarCenterLeft, nameY);
+    ctx.fillText(leftName, avatarCenterLeft, nameY);
+  }
+  if (rightName) {
+    ctx.strokeText(rightName, avatarCenterRight, nameY);
+    ctx.fillText(rightName, avatarCenterRight, nameY);
+  }
+  ctx.restore();
+  statsStartY += USERNAME_FONT_SIZE;
   statsStartY += STATS_MARGIN_TOP;
 
-  // Stat lines: fill bottom of card; scale row height, fonts, and line thickness proportionally
-  const play1 = recentScores?.[0];
-  const play2 = recentScores?.[1];
+  const play1 = scores?.[0];
+  const play2 = scores?.[1];
   if (play1 && play2) {
     const statsAreaHeight = CARD_HEIGHT - statsStartY - STATS_BOTTOM_MARGIN;
     const rowHeight = statsAreaHeight / STAT_DEFS.length;
@@ -319,6 +352,9 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       const stat = STAT_DEFS[i];
       const rowY = statsStartY + i * rowHeight;
       const lineY = rowY + lineYOffset;
+      const winner = winners[i] || 'tie';
+      const leftWins = winner === 'left';
+      const rightWins = winner === 'right';
 
       ctx.font = `${labelFontSize}px ${CARD_FONT_FAMILY}`;
       ctx.textAlign = 'center';
@@ -332,7 +368,6 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       ctx.fillText(stat.label, CENTER_X, labelY);
 
       if (stat.textOnly) {
-        // Mods: text only, placed closer to center — dark grey outline on values
         const textLeft = stat.getText(play1);
         const textRight = stat.getText(play2);
         const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
@@ -354,15 +389,19 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
         const value1 = stat.getValue(play1);
         const value2 = stat.getValue(play2);
         const { length1, length2 } = calculateStatScale(value1, value2);
+        const leftLineWidth = leftWins ? lineStrokeWidth * WINNING_STAT_LINE_WIDTH_MULTIPLIER : lineStrokeWidth;
+        const rightLineWidth = rightWins ? lineStrokeWidth * WINNING_STAT_LINE_WIDTH_MULTIPLIER : lineStrokeWidth;
 
-        ctx.lineWidth = lineStrokeWidth;
+        ctx.lineCap = 'round';
         ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
+        ctx.lineWidth = leftLineWidth;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X - length1, lineY);
         ctx.stroke();
 
         ctx.strokeStyle = STAT_LINE_COLOR_RIGHT;
+        ctx.lineWidth = rightLineWidth;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X + length2, lineY);
@@ -390,4 +429,27 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
   }
 
   return await canvas.encode('png');
+}
+
+/**
+ * Draw the card prototype: background + avatar + username + stat lines (2 most recent plays).
+ * Single user on both sides (for /teto test card).
+ */
+export async function drawCardPrototype(avatarBuffer = null, username = '', recentScores = null) {
+  const user = { avatarBuffer, username };
+  return drawCardInternal(user, user, recentScores || [], null, null);
+}
+
+/**
+ * Draw challenge response card: champion (left) vs responder (right), with stat winners and loser mask.
+ * @param {object} leftUser - { avatarBuffer: Buffer|null, username: string } (champion)
+ * @param {object} rightUser - { avatarBuffer: Buffer|null, username: string } (responder)
+ * @param {object} championScore - score object for left stats
+ * @param {object} responderScore - score object for right stats
+ * @param {('left'|'right'|'tie')[]} statWinners - per-row winner (length 9)
+ * @param {'left'|'right'} loserSide - which avatar gets grey mask (left = champion lost, right = responder lost)
+ * @returns {Promise<Buffer>} PNG buffer
+ */
+export async function drawChallengeCard(leftUser, rightUser, championScore, responderScore, statWinners, loserSide) {
+  return drawCardInternal(leftUser, rightUser, [championScore, responderScore], statWinners, loserSide);
 }

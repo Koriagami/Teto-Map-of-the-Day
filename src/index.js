@@ -14,7 +14,7 @@ import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect, prisma } from './db.js';
 import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty, createMockScores, mockRecentPlay1, mockRecentPlay2 } from './test-mock-data.js';
-import { drawCardPrototype } from './card.js';
+import { drawCardPrototype, drawChallengeCard } from './card.js';
 
 const client = new Client({
   intents: [
@@ -440,11 +440,25 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   const totalMetrics = challengerWins + responderWins; // Ties don't count
   table += `**Winner:** ${responderWins > challengerWins ? responderName : responderWins < challengerWins ? challengerUsername : 'Tie'} (${Math.max(responderWins, challengerWins)}/${totalMetrics} stats)`;
 
+  // Per-stat winner for card: order Mods(0), PP(1), Accuracy(2), Max combo(3), Score(4), Misses(5), 300s(6), 100s(7), 50s(8). 'left'=champion, 'right'=responder, 'tie'
+  const statWinners = [
+    'tie', // Mods
+    responderPP > challengerPP ? 'right' : responderPP < challengerPP ? 'left' : 'tie',
+    responderAcc > challengerAcc ? 'right' : responderAcc < challengerAcc ? 'left' : 'tie',
+    responderCombo > challengerCombo ? 'right' : responderCombo < challengerCombo ? 'left' : 'tie',
+    responderScoreValue > challengerScoreValue ? 'right' : responderScoreValue < challengerScoreValue ? 'left' : 'tie',
+    responderMiss < challengerMiss ? 'right' : responderMiss > challengerMiss ? 'left' : 'tie',
+    responder300 > challenger300 ? 'right' : responder300 < challenger300 ? 'left' : 'tie',
+    responder100 > challenger100 ? 'right' : responder100 < challenger100 ? 'left' : 'tie',
+    responder50 > challenger50 ? 'right' : responder50 < challenger50 ? 'left' : 'tie',
+  ];
+
   return {
     table,
     responderWins,
     challengerWins,
-    totalMetrics
+    totalMetrics,
+    statWinners,
   };
 }
 
@@ -1530,11 +1544,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      const { table: comparison, responderWins, challengerWins, totalMetrics } = comparisonResult;
-      
-      // Check if responder wins (3+ out of 5 metrics)
+      const { responderWins, challengerWins, totalMetrics, statWinners } = comparisonResult;
+
+      // Check if responder wins (3+ out of 5 metrics) — must know before generating card
       const responderWon = responderWins >= 3;
-      
+
       // Update challenge if responder becomes new champion
       if (responderWon) {
         try {
@@ -1548,11 +1562,38 @@ client.on(Events.InteractionCreate, async (interaction) => {
           );
         } catch (error) {
           console.error('Error updating challenge champion:', error);
-          // Continue even if update fails - we'll still show the comparison
         }
       }
 
-      // Build response message with win/loss status and separators
+      // Fetch champion and responder osu users for card (avatar + username)
+      const championOsuId = existingChallenge.challengerOsuId;
+      let leftUser = { avatarBuffer: null, username: challengerScore.user?.username || 'Champion' };
+      let rightUser = { avatarBuffer: null, username: interaction.user.username };
+      try {
+        const championUser = await getUser(championOsuId);
+        if (championUser) {
+          leftUser.username = (championUser.username && String(championUser.username).trim()) || leftUser.username;
+          if (championUser.avatar_url) {
+            const res = await fetch(championUser.avatar_url);
+            if (res.ok) leftUser.avatarBuffer = Buffer.from(await res.arrayBuffer());
+          }
+        }
+        const responderUser = await getUser(osuUserId);
+        if (responderUser) {
+          rightUser.username = (responderUser.username && String(responderUser.username).trim()) || interaction.user.username;
+          if (responderUser.avatar_url) {
+            const res = await fetch(responderUser.avatar_url);
+            if (res.ok) rightUser.avatarBuffer = Buffer.from(await res.arrayBuffer());
+          }
+        }
+      } catch (e) {
+        console.warn('[rsc] Failed to fetch osu users for card:', e.message);
+      }
+
+      const loserSide = responderWon ? 'left' : 'right';
+      const cardBuffer = await drawChallengeCard(leftUser, rightUser, challengerScore, responderScore, statWinners, loserSide);
+      const cardAttachment = new AttachmentBuilder(cardBuffer, { name: 'challenge-card.png' });
+
       const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
       let statusMessage = '';
       if (responderWon) {
@@ -1561,10 +1602,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
       }
 
-      const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
+      const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${statusMessage}\n${separator}`;
 
-      // Post comparison results to Challenges channel (use standard message, not embed)
-      await opChannel.send({ content: responseMessage });
+      await opChannel.send({ content: responseMessage, files: [cardAttachment] });
 
       // Send confirmation to user
       return interaction.editReply({ 
