@@ -6,37 +6,42 @@
 
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 
-/** Font family used for all card text. @napi-rs/canvas may not resolve "sans-serif" on all systems, so we register a concrete font. */
-let CARD_FONT_FAMILY = 'sans-serif';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** Font family used for all card text. Must be a registered font — "sans-serif" often doesn't render in headless/Linux (e.g. Railway). */
+let CARD_FONT_FAMILY = 'CardFont';
+
+/** Bundled font: @fontsource/source-sans-3 (woff2). Works on Railway and everywhere. */
+const BUNDLED_FONT_PATH = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-400-normal.woff2');
 
 function registerCardFont() {
   if (GlobalFonts.has('CardFont')) return;
-  const candidates = [];
-  if (process.platform === 'win32') {
-    const sysRoot = process.env.SYSTEMROOT || process.env.WINDIR || 'C:\\Windows';
-    candidates.push(path.join(sysRoot, 'Fonts', 'arial.ttf'));
-    candidates.push(path.join(sysRoot, 'Fonts', 'Arial.ttf'));
-  } else if (process.platform === 'darwin') {
-    candidates.push('/Library/Fonts/Arial.ttf');
-    candidates.push(path.join(process.env.HOME || '', 'Library', 'Fonts', 'Arial.ttf'));
-  } else {
-    candidates.push(path.join(process.cwd(), 'assets', 'card', 'fonts', 'LiberationSans-Regular.ttf'));
-    candidates.push('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf');
-  }
+  const candidates = [
+    BUNDLED_FONT_PATH,
+    path.join(process.cwd(), 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-400-normal.woff2'),
+  ];
   const fontsDir = path.join(process.cwd(), 'assets', 'card', 'fonts');
   if (fs.existsSync(fontsDir)) {
     try {
       const files = fs.readdirSync(fontsDir).filter((f) => /\.(ttf|otf|woff2?)$/i.test(f));
-      files.forEach((f) => candidates.unshift(path.join(fontsDir, f)));
+      files.forEach((f) => candidates.push(path.join(fontsDir, f)));
     } catch (_) {}
+  }
+  if (process.platform === 'win32') {
+    const sysRoot = process.env.SYSTEMROOT || process.env.WINDIR || 'C:\\Windows';
+    candidates.push(path.join(sysRoot, 'Fonts', 'arial.ttf'), path.join(sysRoot, 'Fonts', 'Arial.ttf'));
+  } else if (process.platform === 'darwin') {
+    candidates.push('/Library/Fonts/Arial.ttf', path.join(process.env.HOME || '', 'Library', 'Fonts', 'Arial.ttf'));
+  } else {
+    candidates.push('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf');
   }
   for (const fontPath of candidates) {
     if (fs.existsSync(fontPath)) {
       try {
         if (GlobalFonts.registerFromPath(fontPath, 'CardFont')) {
-          CARD_FONT_FAMILY = 'CardFont';
           return;
         }
       } catch (e) {
@@ -44,6 +49,8 @@ function registerCardFont() {
       }
     }
   }
+  console.warn('[card] No font registered — card text may not render. Install @fontsource/source-sans-3 or add a .ttf to assets/card/fonts/');
+  CARD_FONT_FAMILY = 'sans-serif';
 }
 
 registerCardFont();

@@ -18,6 +18,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@fontsource/source-sans-3": "^5.2.9",
     "@napi-rs/canvas": "^0.1.89",
     "@prisma/client": "^5.7.1",
     "discord.js": "^14.11.0",
