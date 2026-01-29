@@ -96,7 +96,7 @@ const USERNAME_FONT_SIZE = 18;
 const STATS_MARGIN_TOP = 16;
 const STAT_ROW_HEIGHT_BASE = 34;
 const STAT_LINE_Y_OFFSET_BASE = 12;
-const STAT_NAME_ABOVE_LINE_BASE = 4;
+const STAT_NAME_ABOVE_LINE_BASE = 10; // space between stat title and line
 const STAT_LABEL_FONT_SIZE_BASE = 16;
 const STAT_VALUE_FONT_SIZE_BASE = 14;
 const STAT_VALUE_MARGIN_BASE = 6;
@@ -105,9 +105,10 @@ const STATS_BOTTOM_MARGIN = 24;
 /** Mods text: horizontal offset from center (closer than bar ends) */
 const MODS_TEXT_OFFSET_FROM_CENTER = 90;
 const CENTER_X = CARD_WIDTH / 2;
-/** Colors: score1 line (left), score2 line (right) */
-const STAT_LINE_COLOR_LEFT = '#7dd3fc';
-const STAT_LINE_COLOR_RIGHT = '#fbbf24';
+/** Colors: score1 line (left), score2 line (right) — darker blue for contrast, neon-style */
+const STAT_LINE_COLOR_LEFT = '#0284c7';
+const STAT_LINE_COLOR_RIGHT = '#f59e0b';
+const STAT_LINE_GLOW_BLUR = 8; // blur for neon glow effect
 
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
 export const MAX_STAT_LINE_LENGTH = 200;
@@ -329,18 +330,24 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
         const value2 = stat.getValue(play2);
         const { length1, length2 } = calculateStatScale(value1, value2);
 
-        ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
         ctx.lineWidth = lineStrokeWidth;
+        ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
+        ctx.shadowColor = STAT_LINE_COLOR_LEFT;
+        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X - length1, lineY);
         ctx.stroke();
+        ctx.shadowBlur = 0;
 
         ctx.strokeStyle = STAT_LINE_COLOR_RIGHT;
+        ctx.shadowColor = STAT_LINE_COLOR_RIGHT;
+        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X + length2, lineY);
         ctx.stroke();
+        ctx.shadowBlur = 0;
 
         ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
