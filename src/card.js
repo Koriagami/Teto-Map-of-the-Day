@@ -42,6 +42,17 @@ const AVATAR_TOP_MARGIN = 20;
 const USERNAME_MARGIN_TOP = 8;
 const USERNAME_FONT_SIZE = 18;
 
+/** Stats section under username */
+const STATS_MARGIN_TOP = 16;
+const STAT_ROW_HEIGHT = 28;
+const STAT_LINE_Y_OFFSET = 10; // vertical offset of line within row (below label)
+const STAT_LABEL_FONT_SIZE = 12;
+const STAT_LINE_STROKE_WIDTH = 6;
+const CENTER_X = CARD_WIDTH / 2;
+/** Colors: score1 line (left), score2 line (right) */
+const STAT_LINE_COLOR_LEFT = '#7dd3fc';
+const STAT_LINE_COLOR_RIGHT = '#fbbf24';
+
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
 export const MAX_STAT_LINE_LENGTH = 200;
 
@@ -73,12 +84,24 @@ export function calculateStatScale(value1, value2, maxLength = MAX_STAT_LINE_LEN
 }
 
 /**
- * Draw the card prototype: background (image or solid) + optional avatar at center top + username + a line.
+ * Stat definitions for comparison: label + getter from a play object.
+ * Play object: { score, pp, accuracy (0–1), max_combo }
+ */
+const STAT_DEFS = [
+  { label: 'Score', getValue: (p) => p.score ?? 0 },
+  { label: 'Accuracy %', getValue: (p) => (p.accuracy != null ? p.accuracy * 100 : 0) },
+  { label: 'PP', getValue: (p) => p.pp ?? 0 },
+  { label: 'Max combo', getValue: (p) => p.max_combo ?? 0 },
+];
+
+/**
+ * Draw the card prototype: background + avatar + username + stat lines (2 most recent plays).
  * @param {Buffer | null} [avatarBuffer] - Optional osu! profile picture image bytes
  * @param {string} [username] - Optional osu! username to draw under the avatar
+ * @param {[object, object]} [recentScores] - Optional [play1, play2] for stats (each: score, pp, accuracy, max_combo)
  * @returns {Promise<Buffer>} PNG buffer
  */
-export async function drawCardPrototype(avatarBuffer = null, username = '') {
+export async function drawCardPrototype(avatarBuffer = null, username = '', recentScores = null) {
   const canvas = createCanvas(CARD_WIDTH, CARD_HEIGHT);
   const ctx = canvas.getContext('2d');
 
@@ -119,24 +142,57 @@ export async function drawCardPrototype(avatarBuffer = null, username = '') {
   }
 
   // Osu! username under the profile picture
+  let statsStartY = avatarY + AVATAR_SIZE + USERNAME_MARGIN_TOP;
   if (username && username.length > 0) {
     ctx.save();
     ctx.font = `bold ${USERNAME_FONT_SIZE}px sans-serif`;
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    const usernameY = avatarY + AVATAR_SIZE + USERNAME_MARGIN_TOP;
-    ctx.fillText(username, CARD_WIDTH / 2, usernameY);
+    ctx.fillText(username, CARD_WIDTH / 2, statsStartY);
+    ctx.restore();
+    statsStartY += USERNAME_FONT_SIZE;
+  }
+  statsStartY += STATS_MARGIN_TOP;
+
+  // Stat lines: vertical center axis as start; score1 left, score2 right
+  const play1 = recentScores?.[0];
+  const play2 = recentScores?.[1];
+  if (play1 && play2) {
+    ctx.save();
+    for (let i = 0; i < STAT_DEFS.length; i++) {
+      const { label, getValue } = STAT_DEFS[i];
+      const value1 = getValue(play1);
+      const value2 = getValue(play2);
+      const { length1, length2 } = calculateStatScale(value1, value2);
+
+      const rowY = statsStartY + i * STAT_ROW_HEIGHT;
+      const lineY = rowY + STAT_LINE_Y_OFFSET;
+
+      // Label (left of center)
+      ctx.font = `${STAT_LABEL_FONT_SIZE}px sans-serif`;
+      ctx.fillStyle = '#e5e5e5';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, CENTER_X - 12, lineY);
+
+      // Score1 line: from center going left
+      ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
+      ctx.lineWidth = STAT_LINE_STROKE_WIDTH;
+      ctx.beginPath();
+      ctx.moveTo(CENTER_X, lineY);
+      ctx.lineTo(CENTER_X - length1, lineY);
+      ctx.stroke();
+
+      // Score2 line: from center going right
+      ctx.strokeStyle = STAT_LINE_COLOR_RIGHT;
+      ctx.beginPath();
+      ctx.moveTo(CENTER_X, lineY);
+      ctx.lineTo(CENTER_X + length2, lineY);
+      ctx.stroke();
+    }
     ctx.restore();
   }
-
-  // Draw a simple line (diagonal for visibility)
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(50, 80);
-  ctx.lineTo(CARD_WIDTH - 50, CARD_HEIGHT - 80);
-  ctx.stroke();
 
   return await canvas.encode('png');
 }

@@ -145,3 +145,17 @@ export const mockMods = ['HD', 'HR'];
 
 // Default difficulty name fallback
 export const defaultDifficulty = 'Test Difficulty';
+
+// Mock "2 most recent plays" for card stats (different values for comparison)
+export const mockRecentPlay1 = {
+  score: 36589080,
+  pp: 0,
+  accuracy: 0.9635,
+  max_combo: 1085,
+};
+export const mockRecentPlay2 = {
+  score: 21480640,
+  pp: 146.5,
+  accuracy: 0.9637,
+  max_combo: 666,
+};

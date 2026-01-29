@@ -13,7 +13,7 @@ import cron from 'node-cron';
 import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect, prisma } from './db.js';
-import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty, createMockScores } from './test-mock-data.js';
+import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty, createMockScores, mockRecentPlay1, mockRecentPlay2 } from './test-mock-data.js';
 import { drawCardPrototype } from './card.js';
 
 const client = new Client({
@@ -1241,10 +1241,11 @@ async function testCardCommand(interaction, guildId) {
     }
 
     const osuUsername = osuUser?.username ?? '';
-    const pngBuffer = await drawCardPrototype(avatarBuffer, osuUsername);
+    const recentScores = [mockRecentPlay1, mockRecentPlay2];
+    const pngBuffer = await drawCardPrototype(avatarBuffer, osuUsername, recentScores);
     const attachment = new AttachmentBuilder(pngBuffer, { name: 'card.png' });
     return interaction.editReply({
-      content: '**[TEST MODE]** Card prototype (bg + line + avatar):',
+      content: '**[TEST MODE]** Card prototype (avatar + username + 2 most recent plays stats):',
       files: [attachment],
     });
   } catch (error) {
