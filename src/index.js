@@ -1076,7 +1076,6 @@ async function testRscIssueCommand(interaction, guildId) {
 }
 
 async function testRscRespondCommand(interaction, guildId) {
-  // Get a random challenge or create mock data
   try {
     const challenges = await prisma.activeChallenge.findMany({
       where: { guildId },
@@ -1084,10 +1083,10 @@ async function testRscRespondCommand(interaction, guildId) {
       orderBy: { createdAt: 'desc' }
     });
 
-    let challengerScore, responderScore;
+    let challengerScore, responderScore, championOsuId;
     if (challenges.length > 0) {
       challengerScore = challenges[0].challengerScore;
-      // Ensure user object exists
+      championOsuId = challenges[0].challengerOsuId;
       if (!challengerScore.user) {
         challengerScore.user = { username: 'ChallengerUser' };
       }
@@ -1095,6 +1094,7 @@ async function testRscRespondCommand(interaction, guildId) {
     } else {
       challengerScore = mockChallengerScore;
       responderScore = createMockResponderScore(mockChallengerScore, interaction.user.username);
+      championOsuId = null;
     }
 
     const mapTitle = await getMapTitle(challengerScore);
@@ -1105,15 +1105,55 @@ async function testRscRespondCommand(interaction, guildId) {
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
     const comparisonResult = compareScores(challengerScore, responderScore, interaction.user.username);
-    const { table: comparison } = comparisonResult;
+    const { responderWins, statWinners } = comparisonResult;
+    const responderWon = responderWins >= 3;
+    const loserSide = responderWon ? 'left' : 'right';
+
+    let leftUser = { avatarBuffer: null, username: challengerScore.user?.username || 'Champion' };
+    let rightUser = { avatarBuffer: null, username: interaction.user.username };
+    if (championOsuId) {
+      try {
+        const championUser = await getUser(championOsuId);
+        if (championUser) {
+          leftUser.username = (championUser.username && String(championUser.username).trim()) || leftUser.username;
+          if (championUser.avatar_url) {
+            const res = await fetch(championUser.avatar_url);
+            if (res.ok) leftUser.avatarBuffer = Buffer.from(await res.arrayBuffer());
+          }
+        }
+      } catch (e) {
+        console.warn('[test rscr] Failed to fetch champion osu user:', e.message);
+      }
+    }
+    const userId = interaction.user.id;
+    const association = await associations.get(guildId, userId);
+    if (association?.osuUserId) {
+      try {
+        const responderUser = await getUser(association.osuUserId);
+        if (responderUser) {
+          rightUser.username = (responderUser.username && String(responderUser.username).trim()) || interaction.user.username;
+          if (responderUser.avatar_url) {
+            const res = await fetch(responderUser.avatar_url);
+            if (res.ok) rightUser.avatarBuffer = Buffer.from(await res.arrayBuffer());
+          }
+        }
+      } catch (e) {
+        console.warn('[test rscr] Failed to fetch responder osu user:', e.message);
+      }
+    }
+
+    const cardBuffer = await drawChallengeCard(leftUser, rightUser, challengerScore, responderScore, statWinners, loserSide);
+    const cardAttachment = new AttachmentBuilder(cardBuffer, { name: 'challenge-card.png' });
 
     const separator = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
-    const statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
-    const responseMessage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${comparison}${statusMessage}\n${separator}`;
+    const statusMessage = responderWon
+      ? `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`
+      : `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
+    const responseMessage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!${statusMessage}\n${separator}`;
 
-    // Real /rsc command sends as content (plain message), not embed
-    return interaction.editReply({ 
-      content: responseMessage
+    return interaction.editReply({
+      content: responseMessage,
+      files: [cardAttachment],
     });
   } catch (error) {
     console.error('Error in testRscRespondCommand:', error);
