@@ -90,8 +90,6 @@ const AVATAR_BORDER_WIDTH = 3;
 const AVATAR_BORDER_COLOR = '#ffffff';
 /** Half-transparent grey mask over loser avatar */
 const LOSER_MASK_COLOR = 'rgba(80, 80, 80, 0.55)';
-/** Winning stat row: draw winning side line thicker */
-const WINNING_STAT_LINE_WIDTH_MULTIPLIER = 1.6;
 const AVATAR_TOP_MARGIN = 20;
 /** Horizontal offset of each avatar center from the card center (left = center - offset, right = center + offset) */
 const AVATAR_OFFSET_FROM_CENTER = 130;
@@ -352,10 +350,6 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
       const stat = STAT_DEFS[i];
       const rowY = statsStartY + i * rowHeight;
       const lineY = rowY + lineYOffset;
-      const winner = winners[i] || 'tie';
-      const leftWins = winner === 'left';
-      const rightWins = winner === 'right';
-
       ctx.font = `${labelFontSize}px ${CARD_FONT_FAMILY}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
@@ -389,19 +383,15 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         const value1 = stat.getValue(play1);
         const value2 = stat.getValue(play2);
         const { length1, length2 } = calculateStatScale(value1, value2);
-        const leftLineWidth = leftWins ? lineStrokeWidth * WINNING_STAT_LINE_WIDTH_MULTIPLIER : lineStrokeWidth;
-        const rightLineWidth = rightWins ? lineStrokeWidth * WINNING_STAT_LINE_WIDTH_MULTIPLIER : lineStrokeWidth;
 
-        ctx.lineCap = 'round';
         ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
-        ctx.lineWidth = leftLineWidth;
+        ctx.lineWidth = lineStrokeWidth;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X - length1, lineY);
         ctx.stroke();
 
         ctx.strokeStyle = STAT_LINE_COLOR_RIGHT;
-        ctx.lineWidth = rightLineWidth;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X + length2, lineY);

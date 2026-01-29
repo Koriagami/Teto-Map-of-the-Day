@@ -1151,8 +1151,12 @@ async function testRscRespondCommand(interaction, guildId) {
       : `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
     const responseMessage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!${statusMessage}\n${separator}`;
 
+    const embed = new EmbedBuilder()
+      .setColor(BOT_EMBED_COLOR)
+      .setDescription(responseMessage)
+      .setImage('attachment://challenge-card.png');
     return interaction.editReply({
-      content: responseMessage,
+      embeds: [embed],
       files: [cardAttachment],
     });
   } catch (error) {
@@ -1644,7 +1648,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${statusMessage}\n${separator}`;
 
-      await opChannel.send({ content: responseMessage, files: [cardAttachment] });
+      const embed = new EmbedBuilder()
+        .setColor(BOT_EMBED_COLOR)
+        .setDescription(responseMessage)
+        .setImage('attachment://challenge-card.png');
+      await opChannel.send({ embeds: [embed], files: [cardAttachment] });
 
       // Send confirmation to user
       return interaction.editReply({ 
