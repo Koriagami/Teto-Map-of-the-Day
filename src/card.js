@@ -97,7 +97,6 @@ const STAT_LINE_Y_OFFSET = 12; // vertical offset of line within row (below stat
 const STAT_NAME_ABOVE_LINE = 4; // stat name sits this many px above the line
 const STAT_LABEL_FONT_SIZE = 16; // larger so stat names are visible
 const STAT_VALUE_FONT_SIZE = 14; // larger so compared values are visible
-const STAT_TEXT_OUTLINE_WIDTH = 2; // stroke so text is readable on any background
 const STAT_VALUE_MARGIN = 6; // gap between line end and value text
 const STAT_LINE_STROKE_WIDTH = 6;
 const CENTER_X = CARD_WIDTH / 2;
@@ -245,17 +244,12 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       const rowY = statsStartY + i * STAT_ROW_HEIGHT;
       const lineY = rowY + STAT_LINE_Y_OFFSET;
 
-      // Stat name at center, slightly above the lines (outline so visible on any background)
+      // Stat name at center, slightly above the lines
       ctx.font = `${STAT_LABEL_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
+      ctx.fillStyle = '#e5e5e5';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      const labelY = lineY - STAT_NAME_ABOVE_LINE;
-      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-      ctx.lineWidth = STAT_TEXT_OUTLINE_WIDTH;
-      ctx.lineJoin = 'round';
-      ctx.strokeText(label, CENTER_X, labelY);
-      ctx.fillStyle = '#e5e5e5';
-      ctx.fillText(label, CENTER_X, labelY);
+      ctx.fillText(label, CENTER_X, lineY - STAT_NAME_ABOVE_LINE);
 
       // Score1 line: from center going left
       ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
@@ -272,24 +266,17 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       ctx.lineTo(CENTER_X + length2, lineY);
       ctx.stroke();
 
-      // Value1 at end of left line (left of the line) — outline for visibility
+      // Value1 at end of left line (left of the line)
       ctx.font = `${STAT_VALUE_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
-      const val1X = CENTER_X - length1 - STAT_VALUE_MARGIN;
-      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-      ctx.lineWidth = STAT_TEXT_OUTLINE_WIDTH;
-      ctx.strokeText(format(value1), val1X, lineY);
       ctx.fillStyle = STAT_LINE_COLOR_LEFT;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(format(value1), val1X, lineY);
+      ctx.fillText(format(value1), CENTER_X - length1 - STAT_VALUE_MARGIN, lineY);
 
-      // Value2 at end of right line (right of the line) — outline for visibility
-      const val2X = CENTER_X + length2 + STAT_VALUE_MARGIN;
-      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-      ctx.strokeText(format(value2), val2X, lineY);
+      // Value2 at end of right line (right of the line)
       ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
       ctx.textAlign = 'left';
-      ctx.fillText(format(value2), val2X, lineY);
+      ctx.fillText(format(value2), CENTER_X + length2 + STAT_VALUE_MARGIN, lineY);
     }
     ctx.restore();
   }
