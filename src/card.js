@@ -93,7 +93,7 @@ const USERNAME_MARGIN_TOP = 8;
 const USERNAME_FONT_SIZE = 24;
 
 /** Stats section under username — base values; scaled at draw time to fill card height */
-const STATS_MARGIN_TOP = 16;
+const STATS_MARGIN_TOP = 28; // space from player names to first stat title
 const STAT_ROW_HEIGHT_BASE = 34;
 const STAT_LINE_Y_OFFSET_BASE = 12;
 const STAT_NAME_ABOVE_LINE_BASE = 10; // space between stat title and line
@@ -312,19 +312,25 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       ctx.fillText(stat.label, CENTER_X, lineY - nameAboveLine);
 
       if (stat.textOnly) {
-        // Mods: text only, placed closer to center
+        // Mods: text only, placed closer to center — neon glow on values
         const textLeft = stat.getText(play1);
         const textRight = stat.getText(play2);
         const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
         const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
-        ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
+        ctx.shadowColor = STAT_LINE_COLOR_LEFT;
+        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.fillText(textLeft.length > 12 ? textLeft.slice(0, 10) + '..' : textLeft, textXLeft, lineY);
+        ctx.shadowBlur = 0;
         ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
+        ctx.shadowColor = STAT_LINE_COLOR_RIGHT;
+        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.textAlign = 'left';
         ctx.fillText(textRight.length > 12 ? textRight.slice(0, 10) + '..' : textRight, textXRight, lineY);
+        ctx.shadowBlur = 0;
       } else {
         const value1 = stat.getValue(play1);
         const value2 = stat.getValue(play2);
@@ -332,32 +338,32 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
 
         ctx.lineWidth = lineStrokeWidth;
         ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
-        ctx.shadowColor = STAT_LINE_COLOR_LEFT;
-        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X - length1, lineY);
         ctx.stroke();
-        ctx.shadowBlur = 0;
 
         ctx.strokeStyle = STAT_LINE_COLOR_RIGHT;
-        ctx.shadowColor = STAT_LINE_COLOR_RIGHT;
-        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.beginPath();
         ctx.moveTo(CENTER_X, lineY);
         ctx.lineTo(CENTER_X + length2, lineY);
         ctx.stroke();
-        ctx.shadowBlur = 0;
 
-        ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.textBaseline = 'middle';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
+        ctx.shadowColor = STAT_LINE_COLOR_LEFT;
+        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.fillText(stat.format(value1), CENTER_X - length1 - valueMargin, lineY);
+        ctx.shadowBlur = 0;
 
         ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
+        ctx.shadowColor = STAT_LINE_COLOR_RIGHT;
+        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.textAlign = 'left';
         ctx.fillText(stat.format(value2), CENTER_X + length2 + valueMargin, lineY);
+        ctx.shadowBlur = 0;
       }
     }
     ctx.restore();
