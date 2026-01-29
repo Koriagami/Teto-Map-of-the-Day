@@ -374,16 +374,11 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
         ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
-        ctx.strokeStyle = STAT_VALUE_OUTLINE_COLOR;
-        ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
-        ctx.lineJoin = 'round';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
-        ctx.strokeText(textLeft.length > 12 ? textLeft.slice(0, 10) + '..' : textLeft, textXLeft, lineY);
         ctx.fillText(textLeft.length > 12 ? textLeft.slice(0, 10) + '..' : textLeft, textXLeft, lineY);
         ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
         ctx.textAlign = 'left';
-        ctx.strokeText(textRight.length > 12 ? textRight.slice(0, 10) + '..' : textRight, textXRight, lineY);
         ctx.fillText(textRight.length > 12 ? textRight.slice(0, 10) + '..' : textRight, textXRight, lineY);
       } else {
         const value1 = stat.getValue(play1);
@@ -408,19 +403,14 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
 
         ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
-        ctx.strokeStyle = STAT_VALUE_OUTLINE_COLOR;
-        ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
-        ctx.lineJoin = 'round';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
         const val1X = CENTER_X - length1 - valueMargin;
-        ctx.strokeText(stat.format(value1), val1X, lineY);
         ctx.fillText(stat.format(value1), val1X, lineY);
 
         ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
         ctx.textAlign = 'left';
         const val2X = CENTER_X + length2 + valueMargin;
-        ctx.strokeText(stat.format(value2), val2X, lineY);
         ctx.fillText(stat.format(value2), val2X, lineY);
       }
     }
