@@ -146,16 +146,30 @@ export const mockMods = ['HD', 'HR'];
 // Default difficulty name fallback
 export const defaultDifficulty = 'Test Difficulty';
 
-// Mock "2 most recent plays" for card stats (different values for comparison)
+// Mock "2 most recent plays" for card stats (same fields as challenge response; different values for comparison)
 export const mockRecentPlay1 = {
   score: 36589080,
   pp: 0,
   accuracy: 0.9635,
   max_combo: 1085,
+  statistics: {
+    count_300: 892,
+    count_100: 42,
+    count_50: 8,
+    count_miss: 3,
+  },
+  mods: [{ acronym: 'HD' }, { acronym: 'HR' }],
 };
 export const mockRecentPlay2 = {
   score: 21480640,
   pp: 146.5,
   accuracy: 0.9637,
   max_combo: 666,
+  statistics: {
+    count_300: 654,
+    count_100: 78,
+    count_50: 12,
+    count_miss: 6,
+  },
+  mods: [{ acronym: 'HD' }],
 };

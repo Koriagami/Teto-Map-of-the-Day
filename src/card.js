@@ -144,29 +144,64 @@ export function calculateStatScale(value1, value2, maxLength = MAX_STAT_LINE_LEN
 }
 
 /**
- * Stat definitions: label + getter + formatter for display.
- * Play object: { score, pp, accuracy (0–1), max_combo }
+ * Format mods from play/score object (text only; no numeric value for bars).
+ * Play object may have mods: array of { acronym } or string.
+ */
+function formatMods(play) {
+  if (!play || typeof play !== 'object') return 'No mods';
+  if (Array.isArray(play.mods) && play.mods.length > 0) {
+    const acronyms = play.mods
+      .map((m) => (typeof m === 'object' && m.acronym ? m.acronym : typeof m === 'string' ? m : null))
+      .filter(Boolean);
+    return acronyms.length > 0 ? acronyms.join(', ') : 'No mods';
+  }
+  if (typeof play.mods_string === 'string' && play.mods_string.length > 0) return play.mods_string;
+  if (typeof play.mods === 'string' && play.mods.length > 0) return play.mods;
+  return 'No mods';
+}
+
+/**
+ * Stat definitions: same order as challenge response (PP, Accuracy, Max Combo, Score, Misses, 300s, 100s, 50s, Mods).
+ * Play object: score, pp, accuracy (0–1), max_combo, statistics: { count_300, count_100, count_50, count_miss }, mods.
+ * Use textOnly + getText for Mods (no bar comparison).
  */
 const STAT_DEFS = [
+  { label: 'PP', getValue: (p) => p.pp ?? 0, format: (v) => String(Number(v).toFixed(1)) },
+  {
+    label: 'Accuracy %',
+    getValue: (p) => (p.accuracy != null ? p.accuracy * 100 : 0),
+    format: (v) => `${Number(v).toFixed(2)}%`,
+  },
+  { label: 'Max combo', getValue: (p) => p.max_combo ?? 0, format: (v) => String(Math.round(v)) },
   {
     label: 'Score',
     getValue: (p) => p.score ?? 0,
     format: (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Number(v).toLocaleString()),
   },
   {
-    label: 'Accuracy %',
-    getValue: (p) => (p.accuracy != null ? p.accuracy * 100 : 0),
-    format: (v) => `${Number(v).toFixed(2)}%`,
-  },
-  {
-    label: 'PP',
-    getValue: (p) => p.pp ?? 0,
-    format: (v) => String(Number(v).toFixed(1)),
-  },
-  {
-    label: 'Max combo',
-    getValue: (p) => p.max_combo ?? 0,
+    label: 'Misses',
+    getValue: (p) => p.statistics?.count_miss ?? 0,
     format: (v) => String(Math.round(v)),
+  },
+  {
+    label: '300s',
+    getValue: (p) => p.statistics?.count_300 ?? 0,
+    format: (v) => String(Math.round(v)),
+  },
+  {
+    label: '100s',
+    getValue: (p) => p.statistics?.count_100 ?? 0,
+    format: (v) => String(Math.round(v)),
+  },
+  {
+    label: '50s',
+    getValue: (p) => p.statistics?.count_50 ?? 0,
+    format: (v) => String(Math.round(v)),
+  },
+  {
+    label: 'Mods',
+    textOnly: true,
+    getText: (p) => formatMods(p),
   },
 ];
 
@@ -174,7 +209,7 @@ const STAT_DEFS = [
  * Draw the card prototype: background + avatar + username + stat lines (2 most recent plays).
  * @param {Buffer | null} [avatarBuffer] - Optional osu! profile picture image bytes
  * @param {string} [username] - Optional osu! username to draw under the avatar
- * @param {[object, object]} [recentScores] - Optional [play1, play2] for stats (each: score, pp, accuracy, max_combo)
+ * @param {[object, object]} [recentScores] - Optional [play1, play2] for stats (score, pp, accuracy, max_combo, statistics, mods)
  * @returns {Promise<Buffer>} PNG buffer
  */
 export async function drawCardPrototype(avatarBuffer = null, username = '', recentScores = null) {
@@ -253,47 +288,59 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
   if (play1 && play2) {
     ctx.save();
     for (let i = 0; i < STAT_DEFS.length; i++) {
-      const { label, getValue, format } = STAT_DEFS[i];
-      const value1 = getValue(play1);
-      const value2 = getValue(play2);
-      const { length1, length2 } = calculateStatScale(value1, value2);
-
+      const stat = STAT_DEFS[i];
       const rowY = statsStartY + i * STAT_ROW_HEIGHT;
       const lineY = rowY + STAT_LINE_Y_OFFSET;
 
-      // Stat name at center, slightly above the lines
+      // Stat name at center, slightly above the line
       ctx.font = `${STAT_LABEL_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
       ctx.fillStyle = '#e5e5e5';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(label, CENTER_X, lineY - STAT_NAME_ABOVE_LINE);
+      ctx.fillText(stat.label, CENTER_X, lineY - STAT_NAME_ABOVE_LINE);
 
-      // Score1 line: from center going left
-      ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
-      ctx.lineWidth = STAT_LINE_STROKE_WIDTH;
-      ctx.beginPath();
-      ctx.moveTo(CENTER_X, lineY);
-      ctx.lineTo(CENTER_X - length1, lineY);
-      ctx.stroke();
+      if (stat.textOnly) {
+        // Mods (and any text-only stat): no bars, just left and right text
+        const textLeft = stat.getText(play1);
+        const textRight = stat.getText(play2);
+        const textXLeft = CENTER_X - MAX_STAT_LINE_LENGTH - STAT_VALUE_MARGIN;
+        const textXRight = CENTER_X + MAX_STAT_LINE_LENGTH + STAT_VALUE_MARGIN;
+        ctx.font = `${STAT_VALUE_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = STAT_LINE_COLOR_LEFT;
+        ctx.textAlign = 'right';
+        ctx.fillText(textLeft.length > 12 ? textLeft.slice(0, 10) + '..' : textLeft, textXLeft, lineY);
+        ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
+        ctx.textAlign = 'left';
+        ctx.fillText(textRight.length > 12 ? textRight.slice(0, 10) + '..' : textRight, textXRight, lineY);
+      } else {
+        const value1 = stat.getValue(play1);
+        const value2 = stat.getValue(play2);
+        const { length1, length2 } = calculateStatScale(value1, value2);
 
-      // Score2 line: from center going right
-      ctx.strokeStyle = STAT_LINE_COLOR_RIGHT;
-      ctx.beginPath();
-      ctx.moveTo(CENTER_X, lineY);
-      ctx.lineTo(CENTER_X + length2, lineY);
-      ctx.stroke();
+        ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
+        ctx.lineWidth = STAT_LINE_STROKE_WIDTH;
+        ctx.beginPath();
+        ctx.moveTo(CENTER_X, lineY);
+        ctx.lineTo(CENTER_X - length1, lineY);
+        ctx.stroke();
 
-      // Value1 at end of left line (left of the line)
-      ctx.font = `${STAT_VALUE_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
-      ctx.fillStyle = STAT_LINE_COLOR_LEFT;
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(format(value1), CENTER_X - length1 - STAT_VALUE_MARGIN, lineY);
+        ctx.strokeStyle = STAT_LINE_COLOR_RIGHT;
+        ctx.beginPath();
+        ctx.moveTo(CENTER_X, lineY);
+        ctx.lineTo(CENTER_X + length2, lineY);
+        ctx.stroke();
 
-      // Value2 at end of right line (right of the line)
-      ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
-      ctx.textAlign = 'left';
-      ctx.fillText(format(value2), CENTER_X + length2 + STAT_VALUE_MARGIN, lineY);
+        ctx.font = `${STAT_VALUE_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
+        ctx.fillStyle = STAT_LINE_COLOR_LEFT;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(stat.format(value1), CENTER_X - length1 - STAT_VALUE_MARGIN, lineY);
+
+        ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
+        ctx.textAlign = 'left';
+        ctx.fillText(stat.format(value2), CENTER_X + length2 + STAT_VALUE_MARGIN, lineY);
+      }
     }
     ctx.restore();
   }
