@@ -128,8 +128,15 @@ export function calculateStatScale(value1, value2, maxLength = MAX_STAT_LINE_LEN
     scaleValue = Math.pow(10, exponent + 1);
   }
 
-  const length1 = Math.min((value1 * maxLength) / scaleValue, maxLength);
-  const length2 = Math.min((value2 * maxLength) / scaleValue, maxLength);
+  let length1 = Math.min((value1 * maxLength) / scaleValue, maxLength);
+  let length2 = Math.min((value2 * maxLength) / scaleValue, maxLength);
+
+  // If both lengths are below half of max, double them so the bars are more visible
+  const halfMax = maxLength / 2;
+  if (length1 < halfMax && length2 < halfMax) {
+    length1 *= 2;
+    length2 *= 2;
+  }
 
   return { length1, length2, scaleValue };
 }
