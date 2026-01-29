@@ -85,12 +85,12 @@ async function loadBackgroundImage() {
 }
 
 /** Avatar size (diameter when drawn as circle) at center top */
-const AVATAR_SIZE = 100;
+const AVATAR_SIZE = 120;
 const AVATAR_TOP_MARGIN = 20;
 /** Horizontal offset of each avatar center from the card center (left = center - offset, right = center + offset) */
 const AVATAR_OFFSET_FROM_CENTER = 130;
 const USERNAME_MARGIN_TOP = 8;
-const USERNAME_FONT_SIZE = 18;
+const USERNAME_FONT_SIZE = 24;
 
 /** Stats section under username — base values; scaled at draw time to fill card height */
 const STATS_MARGIN_TOP = 16;
