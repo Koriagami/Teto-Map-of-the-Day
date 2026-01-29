@@ -1220,10 +1220,30 @@ async function testReportCommand(interaction, guildId) {
 
 async function testCardCommand(interaction, guildId) {
   try {
-    const pngBuffer = await drawCardPrototype();
+    const userId = interaction.user.id;
+    const association = await associations.get(guildId, userId);
+    if (!association?.osuUserId) {
+      return interaction.editReply({
+        embeds: await createEmbed('Link your osu! profile first with `/teto link` to show your profile picture on the card.'),
+        ephemeral: true,
+      });
+    }
+
+    let avatarBuffer = null;
+    const osuUser = await getUser(association.osuUserId);
+    if (osuUser?.avatar_url) {
+      try {
+        const res = await fetch(osuUser.avatar_url);
+        if (res.ok) avatarBuffer = Buffer.from(await res.arrayBuffer());
+      } catch (e) {
+        console.warn('[card] Failed to fetch osu! avatar:', e.message);
+      }
+    }
+
+    const pngBuffer = await drawCardPrototype(avatarBuffer);
     const attachment = new AttachmentBuilder(pngBuffer, { name: 'card.png' });
     return interaction.editReply({
-      content: '**[TEST MODE]** Card prototype (bg + line):',
+      content: '**[TEST MODE]** Card prototype (bg + line + avatar):',
       files: [attachment],
     });
   } catch (error) {
