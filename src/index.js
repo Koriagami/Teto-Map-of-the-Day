@@ -1240,7 +1240,8 @@ async function testCardCommand(interaction, guildId) {
       }
     }
 
-    const pngBuffer = await drawCardPrototype(avatarBuffer);
+    const osuUsername = osuUser?.username ?? '';
+    const pngBuffer = await drawCardPrototype(avatarBuffer, osuUsername);
     const attachment = new AttachmentBuilder(pngBuffer, { name: 'card.png' });
     return interaction.editReply({
       content: '**[TEST MODE]** Card prototype (bg + line + avatar):',

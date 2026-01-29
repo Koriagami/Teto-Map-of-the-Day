@@ -36,16 +36,19 @@ async function loadBackgroundImage() {
   }
 }
 
-/** Avatar size (diameter when drawn as circle) at center top */
-const AVATAR_SIZE = 80;
+/** Avatar size (diameter when drawn as circle) at center top — 25% bigger than original 80px */
+const AVATAR_SIZE = 100;
 const AVATAR_TOP_MARGIN = 20;
+const USERNAME_MARGIN_TOP = 8;
+const USERNAME_FONT_SIZE = 18;
 
 /**
- * Draw the card prototype: background (image or solid) + optional avatar at center top + a line.
+ * Draw the card prototype: background (image or solid) + optional avatar at center top + username + a line.
  * @param {Buffer | null} [avatarBuffer] - Optional osu! profile picture image bytes
+ * @param {string} [username] - Optional osu! username to draw under the avatar
  * @returns {Promise<Buffer>} PNG buffer
  */
-export async function drawCardPrototype(avatarBuffer = null) {
+export async function drawCardPrototype(avatarBuffer = null, username = '') {
   const canvas = createCanvas(CARD_WIDTH, CARD_HEIGHT);
   const ctx = canvas.getContext('2d');
 
@@ -73,15 +76,27 @@ export async function drawCardPrototype(avatarBuffer = null) {
       console.warn('[card] Failed to load placeholder pfp:', e.message);
     }
   }
+  const avatarX = (CARD_WIDTH - AVATAR_SIZE) / 2;
+  const avatarY = AVATAR_TOP_MARGIN;
   if (avatarImage) {
-    const x = (CARD_WIDTH - AVATAR_SIZE) / 2;
-    const y = AVATAR_TOP_MARGIN;
     ctx.save();
     ctx.beginPath();
-    ctx.arc(x + AVATAR_SIZE / 2, y + AVATAR_SIZE / 2, AVATAR_SIZE / 2, 0, Math.PI * 2);
+    ctx.arc(avatarX + AVATAR_SIZE / 2, avatarY + AVATAR_SIZE / 2, AVATAR_SIZE / 2, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
-    ctx.drawImage(avatarImage, x, y, AVATAR_SIZE, AVATAR_SIZE);
+    ctx.drawImage(avatarImage, avatarX, avatarY, AVATAR_SIZE, AVATAR_SIZE);
+    ctx.restore();
+  }
+
+  // Osu! username under the profile picture
+  if (username && username.length > 0) {
+    ctx.save();
+    ctx.font = `bold ${USERNAME_FONT_SIZE}px sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const usernameY = avatarY + AVATAR_SIZE + USERNAME_MARGIN_TOP;
+    ctx.fillText(username, CARD_WIDTH / 2, usernameY);
     ctx.restore();
   }
 
