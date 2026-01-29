@@ -86,6 +86,8 @@ async function loadBackgroundImage() {
 
 /** Avatar size (diameter when drawn as circle) at center top */
 const AVATAR_SIZE = 120;
+const AVATAR_BORDER_WIDTH = 3;
+const AVATAR_BORDER_COLOR = '#ffffff';
 const AVATAR_TOP_MARGIN = 20;
 /** Horizontal offset of each avatar center from the card center (left = center - offset, right = center + offset) */
 const AVATAR_OFFSET_FROM_CENTER = 130;
@@ -108,7 +110,8 @@ const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) — darker blue for contrast, neon-style */
 const STAT_LINE_COLOR_LEFT = '#0284c7';
 const STAT_LINE_COLOR_RIGHT = '#f59e0b';
-const STAT_LINE_GLOW_BLUR = 8; // blur for neon glow effect
+/** White outline for stat values (replaces neon) */
+const STAT_VALUE_OUTLINE_WIDTH = 2;
 
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
 export const MAX_STAT_LINE_LENGTH = 200;
@@ -250,13 +253,23 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
   const avatarXRight = avatarCenterRight - AVATAR_SIZE / 2;
 
   if (avatarImage) {
+    const avatarCx = (x) => x + AVATAR_SIZE / 2;
+    const avatarCy = () => avatarY + AVATAR_SIZE / 2;
+    const avatarRadius = AVATAR_SIZE / 2;
     const drawAvatarAt = (x) => {
       ctx.save();
       ctx.beginPath();
-      ctx.arc(x + AVATAR_SIZE / 2, avatarY + AVATAR_SIZE / 2, AVATAR_SIZE / 2, 0, Math.PI * 2);
+      ctx.arc(avatarCx(x), avatarCy(), avatarRadius, 0, Math.PI * 2);
       ctx.closePath();
       ctx.clip();
       ctx.drawImage(avatarImage, x, avatarY, AVATAR_SIZE, AVATAR_SIZE);
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(avatarCx(x), avatarCy(), avatarRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = AVATAR_BORDER_COLOR;
+      ctx.lineWidth = AVATAR_BORDER_WIDTH;
+      ctx.stroke();
       ctx.restore();
     };
     drawAvatarAt(avatarXLeft);
@@ -312,25 +325,24 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       ctx.fillText(stat.label, CENTER_X, lineY - nameAboveLine);
 
       if (stat.textOnly) {
-        // Mods: text only, placed closer to center — neon glow on values
+        // Mods: text only, placed closer to center — white outline on values
         const textLeft = stat.getText(play1);
         const textRight = stat.getText(play2);
         const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
         const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
         ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
+        ctx.lineJoin = 'round';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
-        ctx.shadowColor = STAT_LINE_COLOR_LEFT;
-        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
+        ctx.strokeText(textLeft.length > 12 ? textLeft.slice(0, 10) + '..' : textLeft, textXLeft, lineY);
         ctx.fillText(textLeft.length > 12 ? textLeft.slice(0, 10) + '..' : textLeft, textXLeft, lineY);
-        ctx.shadowBlur = 0;
         ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
-        ctx.shadowColor = STAT_LINE_COLOR_RIGHT;
-        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.textAlign = 'left';
+        ctx.strokeText(textRight.length > 12 ? textRight.slice(0, 10) + '..' : textRight, textXRight, lineY);
         ctx.fillText(textRight.length > 12 ? textRight.slice(0, 10) + '..' : textRight, textXRight, lineY);
-        ctx.shadowBlur = 0;
       } else {
         const value1 = stat.getValue(play1);
         const value2 = stat.getValue(play2);
@@ -351,19 +363,20 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
 
         ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
+        ctx.lineJoin = 'round';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
-        ctx.shadowColor = STAT_LINE_COLOR_LEFT;
-        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
-        ctx.fillText(stat.format(value1), CENTER_X - length1 - valueMargin, lineY);
-        ctx.shadowBlur = 0;
+        const val1X = CENTER_X - length1 - valueMargin;
+        ctx.strokeText(stat.format(value1), val1X, lineY);
+        ctx.fillText(stat.format(value1), val1X, lineY);
 
         ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
-        ctx.shadowColor = STAT_LINE_COLOR_RIGHT;
-        ctx.shadowBlur = STAT_LINE_GLOW_BLUR;
         ctx.textAlign = 'left';
-        ctx.fillText(stat.format(value2), CENTER_X + length2 + valueMargin, lineY);
-        ctx.shadowBlur = 0;
+        const val2X = CENTER_X + length2 + valueMargin;
+        ctx.strokeText(stat.format(value2), val2X, lineY);
+        ctx.fillText(stat.format(value2), val2X, lineY);
       }
     }
     ctx.restore();
