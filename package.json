@@ -18,10 +18,11 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.89",
     "@prisma/client": "^5.7.1",
     "discord.js": "^14.11.0",
-    "node-cron": "^3.0.2",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.2"
   },
   "devDependencies": {
     "prisma": "^5.7.1"

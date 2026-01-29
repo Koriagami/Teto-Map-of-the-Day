@@ -1,0 +1,3 @@
+# Place background images here (e.g. default.png, or any .png)
+# Card command will use assets/card/backgrounds/default.png if present,
+# otherwise assets/card/bubly_bg.png, or a solid fill.

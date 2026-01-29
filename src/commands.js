@@ -46,7 +46,8 @@ const mapSubmit = new SlashCommandBuilder()
             { name: 'rsci', value: 'rsci' },
             { name: 'rscr', value: 'rscr' },
             { name: 'motd', value: 'motd' },
-            { name: 'report', value: 'report' }
+            { name: 'report', value: 'report' },
+            { name: 'card', value: 'card' }
           )
       )
   )

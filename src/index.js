@@ -7,12 +7,14 @@ import {
   PermissionsBitField,
   MessageFlags,
   EmbedBuilder,
+  AttachmentBuilder,
 } from 'discord.js';
 import cron from 'node-cron';
 import { commands } from './commands.js';
 import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect, prisma } from './db.js';
 import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty, createMockScores } from './test-mock-data.js';
+import { drawCardPrototype } from './card.js';
 
 const client = new Client({
   intents: [
@@ -1216,6 +1218,20 @@ async function testReportCommand(interaction, guildId) {
   }
 }
 
+async function testCardCommand(interaction, guildId) {
+  try {
+    const pngBuffer = await drawCardPrototype();
+    const attachment = new AttachmentBuilder(pngBuffer, { name: 'card.png' });
+    return interaction.editReply({
+      content: '**[TEST MODE]** Card prototype (bg + line):',
+      files: [attachment],
+    });
+  } catch (error) {
+    console.error('Error in testCardCommand:', error);
+    throw error;
+  }
+}
+
 // When ready
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -2248,7 +2264,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const testCommand = interaction.options.getString('command');
       if (!testCommand) {
         return interaction.editReply({ 
-          embeds: await createEmbed('Invalid test command. Available: trs, tc, rsci, rscr, motd, report'),
+          embeds: await createEmbed('Invalid test command. Available: trs, tc, rsci, rscr, motd, report, card'),
           ephemeral: true 
         });
       }
@@ -2272,9 +2288,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         case 'report':
           await testReportCommand(interaction, guildId);
           break;
+        case 'card':
+          await testCardCommand(interaction, guildId);
+          break;
         default:
           return interaction.editReply({ 
-            embeds: await createEmbed('Invalid test command. Available: trs, tc, rsci, rscr, motd, report'),
+            embeds: await createEmbed('Invalid test command. Available: trs, tc, rsci, rscr, motd, report, card'),
             ephemeral: true 
           });
       }
