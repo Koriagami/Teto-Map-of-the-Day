@@ -11,17 +11,16 @@ import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** Font family used for card text. Heavy = for stat titles and values. */
+/** Font family used for all card text. Must be a registered font — "sans-serif" often doesn't render in headless/Linux (e.g. Railway). */
 let CARD_FONT_FAMILY = 'CardFont';
-let CARD_FONT_FAMILY_HEAVY = 'CardFontHeavy';
 
-const BUNDLED_FONT_400 = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-400-normal.woff2');
-const BUNDLED_FONT_800 = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-800-normal.woff2');
+/** Bundled font: @fontsource/source-sans-3 (woff2). Works on Railway and everywhere. */
+const BUNDLED_FONT_PATH = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-400-normal.woff2');
 
 function registerCardFont() {
   if (GlobalFonts.has('CardFont')) return;
   const candidates = [
-    BUNDLED_FONT_400,
+    BUNDLED_FONT_PATH,
     path.join(process.cwd(), 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-400-normal.woff2'),
   ];
   const fontsDir = path.join(process.cwd(), 'assets', 'card', 'fonts');
@@ -43,34 +42,15 @@ function registerCardFont() {
     if (fs.existsSync(fontPath)) {
       try {
         if (GlobalFonts.registerFromPath(fontPath, 'CardFont')) {
-          break;
+          return;
         }
       } catch (e) {
         console.warn('[card] Failed to register font from', fontPath, e.message);
       }
     }
   }
-  if (!GlobalFonts.has('CardFont')) {
-    console.warn('[card] No font registered — card text may not render.');
-    CARD_FONT_FAMILY = 'sans-serif';
-  }
-  if (!GlobalFonts.has('CardFontHeavy')) {
-    const heavyCandidates = [
-      BUNDLED_FONT_800,
-      path.join(process.cwd(), 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-800-normal.woff2'),
-      path.join(process.cwd(), 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-700-normal.woff2'),
-    ];
-    for (const fontPath of heavyCandidates) {
-      if (fs.existsSync(fontPath)) {
-        try {
-          if (GlobalFonts.registerFromPath(fontPath, 'CardFontHeavy')) break;
-        } catch (e) {
-          console.warn('[card] Failed to register heavy font:', e.message);
-        }
-      }
-    }
-    if (!GlobalFonts.has('CardFontHeavy')) CARD_FONT_FAMILY_HEAVY = CARD_FONT_FAMILY;
-  }
+  console.warn('[card] No font registered — card text may not render. Install @fontsource/source-sans-3 or add a .ttf to assets/card/fonts/');
+  CARD_FONT_FAMILY = 'sans-serif';
 }
 
 registerCardFont();
@@ -124,7 +104,7 @@ const STAT_ROW_HEIGHT_BASE = 34;
 const STAT_LINE_Y_OFFSET_BASE = 12;
 const STAT_NAME_ABOVE_LINE_BASE = 10; // space between stat title and line
 const STAT_LABEL_FONT_SIZE_BASE = 16;
-const STAT_VALUE_FONT_SIZE_BASE = 20; // bigger for stats values
+const STAT_VALUE_FONT_SIZE_BASE = 14;
 const STAT_VALUE_MARGIN_BASE = 6;
 const STAT_LINE_STROKE_WIDTH_BASE = 6;
 const STATS_BOTTOM_MARGIN = 24;
@@ -376,7 +356,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
       const leftWins = winner === 'left';
       const rightWins = winner === 'right';
 
-      ctx.font = `${labelFontSize}px ${CARD_FONT_FAMILY_HEAVY}`;
+      ctx.font = `${labelFontSize}px ${CARD_FONT_FAMILY}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       const labelY = lineY - nameAboveLine;
@@ -392,7 +372,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         const textRight = stat.getText(play2);
         const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
         const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
-        ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY_HEAVY}`;
+        ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.strokeStyle = STAT_VALUE_OUTLINE_COLOR;
         ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
@@ -426,7 +406,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         ctx.lineTo(CENTER_X + length2, lineY);
         ctx.stroke();
 
-        ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY_HEAVY}`;
+        ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.strokeStyle = STAT_VALUE_OUTLINE_COLOR;
         ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;

@@ -1149,14 +1149,18 @@ async function testRscRespondCommand(interaction, guildId) {
     const statusMessage = responderWon
       ? `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`
       : `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
-    const responseMessage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!${statusMessage}\n${separator}`;
+    const messageBeforeImage = `**[TEST MODE]**\n${separator}\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
+    const messageAfterImage = `${statusMessage}\n${separator}`;
 
-    const embed = new EmbedBuilder()
+    const embed1 = new EmbedBuilder()
       .setColor(BOT_EMBED_COLOR)
-      .setDescription(responseMessage)
+      .setDescription(messageBeforeImage)
       .setImage('attachment://challenge-card.png');
+    const embed2 = new EmbedBuilder()
+      .setColor(BOT_EMBED_COLOR)
+      .setDescription(messageAfterImage);
     return interaction.editReply({
-      embeds: [embed],
+      embeds: [embed1, embed2],
       files: [cardAttachment],
     });
   } catch (error) {
@@ -1646,13 +1650,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
         statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
       }
 
-      const responseMessage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!\n\n${statusMessage}\n${separator}`;
+      const messageBeforeImage = `${separator}\n<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
+      const messageAfterImage = `\n\n${statusMessage}\n${separator}`;
 
-      const embed = new EmbedBuilder()
+      const embed1 = new EmbedBuilder()
         .setColor(BOT_EMBED_COLOR)
-        .setDescription(responseMessage)
+        .setDescription(messageBeforeImage)
         .setImage('attachment://challenge-card.png');
-      await opChannel.send({ embeds: [embed], files: [cardAttachment] });
+      const embed2 = new EmbedBuilder()
+        .setColor(BOT_EMBED_COLOR)
+        .setDescription(messageAfterImage);
+      await opChannel.send({ embeds: [embed1, embed2], files: [cardAttachment] });
 
       // Send confirmation to user
       return interaction.editReply({ 
