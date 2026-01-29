@@ -1240,7 +1240,8 @@ async function testCardCommand(interaction, guildId) {
       }
     }
 
-    const osuUsername = osuUser?.username ?? '';
+    // Prefer API username; fallback to stored osuUsername from link, then generic label
+    const osuUsername = (osuUser?.username && String(osuUser.username).trim()) || (association?.osuUsername && String(association.osuUsername).trim()) || 'Player';
     const recentScores = [mockRecentPlay1, mockRecentPlay2];
     const pngBuffer = await drawCardPrototype(avatarBuffer, osuUsername, recentScores);
     const attachment = new AttachmentBuilder(pngBuffer, { name: 'card.png' });

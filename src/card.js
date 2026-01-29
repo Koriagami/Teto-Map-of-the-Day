@@ -1,11 +1,52 @@
 /**
  * Card image drawing (Skia via @napi-rs/canvas).
  * Prototype: background image + a line drawn on it.
+ * Text requires a registered font; we register a system/bundled font so labels and values render.
  */
 
 import path from 'path';
 import fs from 'fs';
-import { createCanvas, loadImage } from '@napi-rs/canvas';
+import { createCanvas, loadImage, GlobalFonts } from '@napi-rs/canvas';
+
+/** Font family used for all card text. @napi-rs/canvas may not resolve "sans-serif" on all systems, so we register a concrete font. */
+let CARD_FONT_FAMILY = 'sans-serif';
+
+function registerCardFont() {
+  if (GlobalFonts.has('CardFont')) return;
+  const candidates = [];
+  if (process.platform === 'win32') {
+    const sysRoot = process.env.SYSTEMROOT || process.env.WINDIR || 'C:\\Windows';
+    candidates.push(path.join(sysRoot, 'Fonts', 'arial.ttf'));
+    candidates.push(path.join(sysRoot, 'Fonts', 'Arial.ttf'));
+  } else if (process.platform === 'darwin') {
+    candidates.push('/Library/Fonts/Arial.ttf');
+    candidates.push(path.join(process.env.HOME || '', 'Library', 'Fonts', 'Arial.ttf'));
+  } else {
+    candidates.push(path.join(process.cwd(), 'assets', 'card', 'fonts', 'LiberationSans-Regular.ttf'));
+    candidates.push('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf');
+  }
+  const fontsDir = path.join(process.cwd(), 'assets', 'card', 'fonts');
+  if (fs.existsSync(fontsDir)) {
+    try {
+      const files = fs.readdirSync(fontsDir).filter((f) => /\.(ttf|otf|woff2?)$/i.test(f));
+      files.forEach((f) => candidates.unshift(path.join(fontsDir, f)));
+    } catch (_) {}
+  }
+  for (const fontPath of candidates) {
+    if (fs.existsSync(fontPath)) {
+      try {
+        if (GlobalFonts.registerFromPath(fontPath, 'CardFont')) {
+          CARD_FONT_FAMILY = 'CardFont';
+          return;
+        }
+      } catch (e) {
+        console.warn('[card] Failed to register font from', fontPath, e.message);
+      }
+    }
+  }
+}
+
+registerCardFont();
 
 /** Card dimensions */
 export const CARD_WIDTH = 650;
@@ -44,11 +85,12 @@ const USERNAME_FONT_SIZE = 18;
 
 /** Stats section under username */
 const STATS_MARGIN_TOP = 16;
-const STAT_ROW_HEIGHT = 28;
-const STAT_LINE_Y_OFFSET = 10; // vertical offset of line within row (below stat name)
+const STAT_ROW_HEIGHT = 34; // enough for label + line + value (increased for larger font)
+const STAT_LINE_Y_OFFSET = 12; // vertical offset of line within row (below stat name)
 const STAT_NAME_ABOVE_LINE = 4; // stat name sits this many px above the line
-const STAT_LABEL_FONT_SIZE = 12;
-const STAT_VALUE_FONT_SIZE = 11;
+const STAT_LABEL_FONT_SIZE = 16; // larger so stat names are visible
+const STAT_VALUE_FONT_SIZE = 14; // larger so compared values are visible
+const STAT_TEXT_OUTLINE_WIDTH = 2; // stroke so text is readable on any background
 const STAT_VALUE_MARGIN = 6; // gap between line end and value text
 const STAT_LINE_STROKE_WIDTH = 6;
 const CENTER_X = CARD_WIDTH / 2;
@@ -160,15 +202,23 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
     ctx.restore();
   }
 
-  // Osu! username under the profile picture
+  // Osu! username under the profile picture — always show a label when we have one; make it visible on any background
   let statsStartY = avatarY + AVATAR_SIZE + USERNAME_MARGIN_TOP;
-  if (username && username.length > 0) {
+  const displayName = (username && String(username).trim()) ? String(username).trim() : null;
+  if (displayName) {
     ctx.save();
-    ctx.font = `bold ${USERNAME_FONT_SIZE}px sans-serif`;
-    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${USERNAME_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText(username, CARD_WIDTH / 2, statsStartY);
+    const nameX = CARD_WIDTH / 2;
+    const nameY = statsStartY;
+    // Dark outline so white text is readable on light backgrounds (e.g. bubly_bg)
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(displayName, nameX, nameY);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(displayName, nameX, nameY);
     ctx.restore();
     statsStartY += USERNAME_FONT_SIZE;
   }
@@ -188,12 +238,17 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       const rowY = statsStartY + i * STAT_ROW_HEIGHT;
       const lineY = rowY + STAT_LINE_Y_OFFSET;
 
-      // Stat name at center, slightly above the lines
-      ctx.font = `${STAT_LABEL_FONT_SIZE}px sans-serif`;
-      ctx.fillStyle = '#e5e5e5';
+      // Stat name at center, slightly above the lines (outline so visible on any background)
+      ctx.font = `${STAT_LABEL_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.fillText(label, CENTER_X, lineY - STAT_NAME_ABOVE_LINE);
+      const labelY = lineY - STAT_NAME_ABOVE_LINE;
+      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.lineWidth = STAT_TEXT_OUTLINE_WIDTH;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(label, CENTER_X, labelY);
+      ctx.fillStyle = '#e5e5e5';
+      ctx.fillText(label, CENTER_X, labelY);
 
       // Score1 line: from center going left
       ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
@@ -210,17 +265,24 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       ctx.lineTo(CENTER_X + length2, lineY);
       ctx.stroke();
 
-      // Value1 at end of left line (left of the line)
-      ctx.font = `${STAT_VALUE_FONT_SIZE}px sans-serif`;
+      // Value1 at end of left line (left of the line) — outline for visibility
+      ctx.font = `${STAT_VALUE_FONT_SIZE}px ${CARD_FONT_FAMILY}`;
+      const val1X = CENTER_X - length1 - STAT_VALUE_MARGIN;
+      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.lineWidth = STAT_TEXT_OUTLINE_WIDTH;
+      ctx.strokeText(format(value1), val1X, lineY);
       ctx.fillStyle = STAT_LINE_COLOR_LEFT;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText(format(value1), CENTER_X - length1 - STAT_VALUE_MARGIN, lineY);
+      ctx.fillText(format(value1), val1X, lineY);
 
-      // Value2 at end of right line (right of the line)
+      // Value2 at end of right line (right of the line) — outline for visibility
+      const val2X = CENTER_X + length2 + STAT_VALUE_MARGIN;
+      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.strokeText(format(value2), val2X, lineY);
       ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
       ctx.textAlign = 'left';
-      ctx.fillText(format(value2), CENTER_X + length2 + STAT_VALUE_MARGIN, lineY);
+      ctx.fillText(format(value2), val2X, lineY);
     }
     ctx.restore();
   }
