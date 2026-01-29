@@ -110,9 +110,10 @@ const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) — darker blue for contrast, neon-style */
 const STAT_LINE_COLOR_LEFT = '#0284c7';
 const STAT_LINE_COLOR_RIGHT = '#f59e0b';
-/** Dark grey outline for stat values (highlight) */
+/** Outline for stat names (dark grey) and stat values (white-ish grey) */
 const STAT_VALUE_OUTLINE_WIDTH = 2;
-const STAT_VALUE_OUTLINE_COLOR = '#2d2d2d';
+const STAT_LABEL_OUTLINE_COLOR = '#2d2d2d';   // stat names
+const STAT_VALUE_OUTLINE_COLOR = '#e0e0e0';   // stat values
 
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
 export const MAX_STAT_LINE_LENGTH = 200;
@@ -323,7 +324,7 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       const labelY = lineY - nameAboveLine;
-      ctx.strokeStyle = STAT_VALUE_OUTLINE_COLOR;
+      ctx.strokeStyle = STAT_LABEL_OUTLINE_COLOR;
       ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
       ctx.lineJoin = 'round';
       ctx.strokeText(stat.label, CENTER_X, labelY);
