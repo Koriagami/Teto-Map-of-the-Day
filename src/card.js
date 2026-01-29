@@ -45,8 +45,11 @@ const USERNAME_FONT_SIZE = 18;
 /** Stats section under username */
 const STATS_MARGIN_TOP = 16;
 const STAT_ROW_HEIGHT = 28;
-const STAT_LINE_Y_OFFSET = 10; // vertical offset of line within row (below label)
+const STAT_LINE_Y_OFFSET = 10; // vertical offset of line within row (below stat name)
+const STAT_NAME_ABOVE_LINE = 4; // stat name sits this many px above the line
 const STAT_LABEL_FONT_SIZE = 12;
+const STAT_VALUE_FONT_SIZE = 11;
+const STAT_VALUE_MARGIN = 6; // gap between line end and value text
 const STAT_LINE_STROKE_WIDTH = 6;
 const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) */
@@ -84,14 +87,30 @@ export function calculateStatScale(value1, value2, maxLength = MAX_STAT_LINE_LEN
 }
 
 /**
- * Stat definitions for comparison: label + getter from a play object.
+ * Stat definitions: label + getter + formatter for display.
  * Play object: { score, pp, accuracy (0–1), max_combo }
  */
 const STAT_DEFS = [
-  { label: 'Score', getValue: (p) => p.score ?? 0 },
-  { label: 'Accuracy %', getValue: (p) => (p.accuracy != null ? p.accuracy * 100 : 0) },
-  { label: 'PP', getValue: (p) => p.pp ?? 0 },
-  { label: 'Max combo', getValue: (p) => p.max_combo ?? 0 },
+  {
+    label: 'Score',
+    getValue: (p) => p.score ?? 0,
+    format: (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Number(v).toLocaleString()),
+  },
+  {
+    label: 'Accuracy %',
+    getValue: (p) => (p.accuracy != null ? p.accuracy * 100 : 0),
+    format: (v) => `${Number(v).toFixed(2)}%`,
+  },
+  {
+    label: 'PP',
+    getValue: (p) => p.pp ?? 0,
+    format: (v) => String(Number(v).toFixed(1)),
+  },
+  {
+    label: 'Max combo',
+    getValue: (p) => p.max_combo ?? 0,
+    format: (v) => String(Math.round(v)),
+  },
 ];
 
 /**
@@ -161,7 +180,7 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
   if (play1 && play2) {
     ctx.save();
     for (let i = 0; i < STAT_DEFS.length; i++) {
-      const { label, getValue } = STAT_DEFS[i];
+      const { label, getValue, format } = STAT_DEFS[i];
       const value1 = getValue(play1);
       const value2 = getValue(play2);
       const { length1, length2 } = calculateStatScale(value1, value2);
@@ -169,12 +188,12 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       const rowY = statsStartY + i * STAT_ROW_HEIGHT;
       const lineY = rowY + STAT_LINE_Y_OFFSET;
 
-      // Label (left of center)
+      // Stat name at center, slightly above the lines
       ctx.font = `${STAT_LABEL_FONT_SIZE}px sans-serif`;
       ctx.fillStyle = '#e5e5e5';
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, CENTER_X - 12, lineY);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(label, CENTER_X, lineY - STAT_NAME_ABOVE_LINE);
 
       // Score1 line: from center going left
       ctx.strokeStyle = STAT_LINE_COLOR_LEFT;
@@ -190,6 +209,18 @@ export async function drawCardPrototype(avatarBuffer = null, username = '', rece
       ctx.moveTo(CENTER_X, lineY);
       ctx.lineTo(CENTER_X + length2, lineY);
       ctx.stroke();
+
+      // Value1 at end of left line (left of the line)
+      ctx.font = `${STAT_VALUE_FONT_SIZE}px sans-serif`;
+      ctx.fillStyle = STAT_LINE_COLOR_LEFT;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(format(value1), CENTER_X - length1 - STAT_VALUE_MARGIN, lineY);
+
+      // Value2 at end of right line (right of the line)
+      ctx.fillStyle = STAT_LINE_COLOR_RIGHT;
+      ctx.textAlign = 'left';
+      ctx.fillText(format(value2), CENTER_X + length2 + STAT_VALUE_MARGIN, lineY);
     }
     ctx.restore();
   }
