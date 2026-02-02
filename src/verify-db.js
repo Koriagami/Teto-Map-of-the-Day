@@ -44,8 +44,8 @@ async function verifyDatabase() {
     }
     // Test 1: Server Config
     console.log('1. Testing Server Config...');
-    await serverConfig.set(testGuildId, testChannelId);
-    const retrievedChannel = await serverConfig.get(testGuildId);
+    await serverConfig.setChannel(testGuildId, 'tmotd', testChannelId);
+    const retrievedChannel = await serverConfig.getChannelId(testGuildId, 'tmotd');
     if (retrievedChannel === testChannelId) {
       console.log('   ✅ Server Config: PASS');
     } else {
