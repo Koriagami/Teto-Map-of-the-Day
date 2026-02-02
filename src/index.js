@@ -330,7 +330,8 @@ async function createAndPostChallenge(guildId, userId, osuUserId, userScore, opC
   const beatmapLink = formatBeatmapLink(userScore);
   const playerStats = await formatPlayerStats(userScore);
   const mapTitle = await getMapTitle(userScore);
-  const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+  const artist = await getMapArtist(userScore);
+  const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty, artist);
   const starRatingText = await formatStarRating(userScore);
   const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
   
@@ -569,6 +570,26 @@ async function getMapTitle(score) {
   return 'Unknown Map';
 }
 
+// Helper: get map artist from score or beatmap object (or fetch beatmap if needed)
+async function getMapArtist(scoreOrBeatmap) {
+  if (!scoreOrBeatmap) return '';
+  const artist = scoreOrBeatmap.beatmap?.beatmapset?.artist
+    || scoreOrBeatmap.beatmap?.beatmapset?.artist_unicode
+    || scoreOrBeatmap.beatmapset?.artist
+    || scoreOrBeatmap.beatmapset?.artist_unicode;
+  if (artist) return artist;
+  const beatmapId = scoreOrBeatmap.beatmap?.id || scoreOrBeatmap?.id;
+  if (beatmapId) {
+    try {
+      const beatmap = await getBeatmap(beatmapId);
+      return beatmap?.beatmapset?.artist || beatmap?.beatmapset?.artist_unicode || '';
+    } catch (error) {
+      console.error('Error fetching beatmap for artist:', error);
+    }
+  }
+  return '';
+}
+
 // Helper: get star rating from score/beatmap object (with mod adjustments if available)
 // Note: The osu! API v2 doesn't provide mod-adjusted star ratings directly.
 // Score objects from the API typically contain the base difficulty_rating.
@@ -616,8 +637,11 @@ async function formatStarRating(scoreOrBeatmap) {
   return '';
 }
 
-// Helper: format difficulty label (without star rating)
-function formatDifficultyLabel(mapTitle, difficulty) {
+// Helper: format difficulty label (without star rating). Format: "artist - map name [difficulty]"
+function formatDifficultyLabel(mapTitle, difficulty, artist = '') {
+  if (artist && String(artist).trim()) {
+    return `${artist.trim()} - ${mapTitle} [${difficulty}]`;
+  }
   return `${mapTitle} [${difficulty}]`;
 }
 
@@ -970,8 +994,9 @@ async function testTrsCommand(interaction, guildId) {
     const beatmapLink = formatBeatmapLink(testScore);
     const playerStats = await formatPlayerStats(testScore);
     const mapTitle = await getMapTitle(testScore);
+    const artist = await getMapArtist(testScore);
     const difficulty = testScore.beatmap?.version || defaultDifficulty;
-    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty, artist);
     const starRatingText = await formatStarRating(testScore);
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
@@ -1010,8 +1035,9 @@ async function testTcCommand(interaction, guildId) {
 
     const beatmapLink = formatBeatmapLink(testScores[0]);
     const mapTitle = await getMapTitle(testScores[0]);
+    const artist = await getMapArtist(testScores[0]);
     const difficulty = testScores[0].beatmap?.version || defaultDifficulty;
-    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty, artist);
     const starRatingText = await formatStarRating(testScores[0]);
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
@@ -1066,8 +1092,9 @@ async function testRscIssueCommand(interaction, guildId) {
     const beatmapLink = formatBeatmapLink(testScore);
     const playerStats = await formatPlayerStats(testScore);
     const mapTitle = await getMapTitle(testScore);
+    const artist = await getMapArtist(testScore);
     const difficulty = testScore.beatmap?.version || defaultDifficulty;
-    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty, artist);
     const starRatingText = await formatStarRating(testScore);
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
@@ -1106,8 +1133,9 @@ async function testRscRespondCommand(interaction, guildId) {
     }
 
     const mapTitle = await getMapTitle(challengerScore);
+    const artist = await getMapArtist(challengerScore);
     const difficulty = challengerScore.beatmap?.version || defaultDifficulty;
-    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+    const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty, artist);
     const starRatingText = await formatStarRating(challengerScore);
     const beatmapLink = formatBeatmapLink(challengerScore);
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
@@ -1220,12 +1248,13 @@ async function testMotdCommand(interaction, guildId) {
     }
 
     // Format message with map name and difficulty as link (with star rating)
+    const artist = beatmap?.beatmapset?.artist || beatmap?.beatmapset?.artist_unicode || '';
     let difficultyLabel = null;
     if (mapName && difficultyName) {
-      const labelWithStar = await formatDifficultyLabel(mapName, difficultyName, beatmap);
+      const labelWithStar = formatDifficultyLabel(mapName, difficultyName, artist);
       difficultyLabel = `[${labelWithStar}](${difficultyLink})`;
     } else if (difficultyName) {
-      const labelWithStar = await formatDifficultyLabel('Unknown Map', difficultyName, beatmap);
+      const labelWithStar = formatDifficultyLabel('Unknown Map', difficultyName, artist);
       difficultyLabel = `[${labelWithStar}](${difficultyLink})`;
     } else {
       difficultyLabel = difficultyLink; // Fallback to plain link
@@ -1416,7 +1445,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (existingChallenge) {
           // Challenge exists, proceed to PART B
           const mapTitle = await getMapTitle(userScore);
-          const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+          const artist = await getMapArtist(userScore);
+          const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty, artist);
           const starRatingText = await formatStarRating(userScore);
           await interaction.editReply({ 
             embeds: await createEmbed(`There is already an active challenge for ${starRatingText}**${difficultyLabel}**.\nORA ORA! WE ARE ENTERING THE COMPETITION!`)
@@ -1592,7 +1622,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       // Get map title and format difficulty label with link
       const mapTitle = await getMapTitle(challengerScore);
-      const difficultyLabel = formatDifficultyLabel(mapTitle, challengeDifficulty);
+      const artist = await getMapArtist(challengerScore);
+      const difficultyLabel = formatDifficultyLabel(mapTitle, challengeDifficulty, artist);
       const starRatingText = await formatStarRating(challengerScore);
       const beatmapLink = formatBeatmapLink(challengerScore);
       const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
@@ -1779,8 +1810,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const beatmapLink = formatBeatmapLink(userScore);
       const playerStats = await formatPlayerStats(userScore);
       const mapTitle = await getMapTitle(userScore);
+      const artist = await getMapArtist(userScore);
       const difficulty = userScore.beatmap.version;
-      const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty);
+      const difficultyLabel = formatDifficultyLabel(mapTitle, difficulty, artist);
       const starRatingText = await formatStarRating(userScore);
       const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
@@ -1976,10 +2008,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
           
           // Use beatmapData if available, otherwise use first score for star rating
           const scoreOrBeatmapForStarRating = beatmapData || sortedScores[0];
+          const artist = beatmapData?.beatmapset?.artist || beatmapData?.beatmapset?.artist_unicode || await getMapArtist(sortedScores[0]) || '';
           // Always use difficulty name from API (beatmapDifficulty) as it's the source of truth
           // Fall back to difficulty from score if we don't have beatmapData
           const displayDifficulty = beatmapDifficulty || sortedScores[0]?.beatmap?.version || difficulty || 'Unknown';
-          const difficultyLabel = formatDifficultyLabel(mapTitle, displayDifficulty);
+          const difficultyLabel = formatDifficultyLabel(mapTitle, displayDifficulty, artist);
           const starRatingText = await formatStarRating(scoreOrBeatmapForStarRating);
           const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
@@ -2109,7 +2142,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         }
         const scoreOrBeatmapForStarRating = beatmapData || sortedRecords[0].score;
-        const difficultyLabel = formatDifficultyLabel(mapTitle, finalDifficulty || sortedRecords[0].score.beatmap?.version || 'Unknown');
+        const artist = beatmapData?.beatmapset?.artist || beatmapData?.beatmapset?.artist_unicode || await getMapArtist(sortedRecords[0].score) || '';
+        const difficultyLabel = formatDifficultyLabel(mapTitle, finalDifficulty || sortedRecords[0].score.beatmap?.version || 'Unknown', artist);
         const starRatingText = await formatStarRating(scoreOrBeatmapForStarRating);
         const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;
 
@@ -2193,13 +2227,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       
       // Format the difficulty label as a clickable link
+      const artistForError = beatmapDataForError?.beatmapset?.artist || beatmapDataForError?.beatmapset?.artist_unicode || '';
       let difficultyLabel = null;
       if (mapTitle && difficultyName && beatmapLink) {
-        const difficultyLabelText = formatDifficultyLabel(mapTitle, difficultyName);
+        const difficultyLabelText = formatDifficultyLabel(mapTitle, difficultyName, artistForError);
         const starRatingText = beatmapDataForError ? await formatStarRating(beatmapDataForError) : '';
         difficultyLabel = `${starRatingText}[${difficultyLabelText}](${beatmapLink})`;
       } else if (difficultyName && beatmapLink) {
-        const difficultyLabelText = formatDifficultyLabel('Unknown Map', difficultyName);
+        const difficultyLabelText = formatDifficultyLabel('Unknown Map', difficultyName, artistForError);
         const starRatingText = beatmapDataForError ? await formatStarRating(beatmapDataForError) : '';
         difficultyLabel = `${starRatingText}[${difficultyLabelText}](${beatmapLink})`;
       } else if (difficultyName) {
@@ -2511,13 +2546,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     // Format message with map name and difficulty as link (with star rating)
+    const artist = beatmap?.beatmapset?.artist || beatmap?.beatmapset?.artist_unicode || '';
     let difficultyLabel = null;
     const starRatingText = await formatStarRating(beatmap);
     if (mapName && difficultyName) {
-      const label = formatDifficultyLabel(mapName, difficultyName);
+      const label = formatDifficultyLabel(mapName, difficultyName, artist);
       difficultyLabel = `${starRatingText}[${label}](${difficultyLink})`;
     } else if (difficultyName) {
-      const label = formatDifficultyLabel('Unknown Map', difficultyName);
+      const label = formatDifficultyLabel('Unknown Map', difficultyName, artist);
       difficultyLabel = `${starRatingText}[${label}](${difficultyLink})`;
     } else {
       difficultyLabel = starRatingText + difficultyLink; // Fallback to plain link with star rating
@@ -2634,13 +2670,14 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       }
       
       // Format message with map name and difficulty as link in parentheses (with star rating)
+      const artist = beatmap?.beatmapset?.artist || beatmap?.beatmapset?.artist_unicode || '';
       let difficultyLabel = '';
       const starRatingText = await formatStarRating(beatmap);
       if (mapName && difficultyName && difficultyLink) {
-        const label = formatDifficultyLabel(mapName, difficultyName);
+        const label = formatDifficultyLabel(mapName, difficultyName, artist);
         difficultyLabel = `(${starRatingText}[${label}](${difficultyLink}))`;
       } else if (difficultyName && difficultyLink) {
-        const label = formatDifficultyLabel('Unknown Map', difficultyName);
+        const label = formatDifficultyLabel('Unknown Map', difficultyName, artist);
         difficultyLabel = `(${starRatingText}[${label}](${difficultyLink}))`;
       } else if (difficultyLink) {
         difficultyLabel = `(${starRatingText}${difficultyLink})`;
@@ -2673,7 +2710,8 @@ async function formatChallengeEntry(challenge) {
     }
     
     const mapTitle = await getMapTitle(score);
-    const difficultyLabel = formatDifficultyLabel(mapTitle, challenge.difficulty);
+    const artist = await getMapArtist(score);
+    const difficultyLabel = formatDifficultyLabel(mapTitle, challenge.difficulty, artist);
     const starRatingText = await formatStarRating(score);
     const beatmapLink = formatBeatmapLink(score);
     
@@ -2711,7 +2749,8 @@ async function formatChallengeEntryWithDays(challenge, timeHeld) {
     }
     
     const mapTitle = await getMapTitle(score);
-    const difficultyLabel = formatDifficultyLabel(mapTitle, challenge.difficulty);
+    const artist = await getMapArtist(score);
+    const difficultyLabel = formatDifficultyLabel(mapTitle, challenge.difficulty, artist);
     const starRatingText = await formatStarRating(score);
     const beatmapLink = formatBeatmapLink(score);
     
