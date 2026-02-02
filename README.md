@@ -15,6 +15,7 @@ Discord bot for submitting and voting on osu! maps.
 ## Quick Setup
 
 - Click https://discord.com/oauth2/authorize?client_id=1447929535466049657&permissions=388160&integration_type=0&scope=bot+applications.commands
+- Then use `/teto help` in any text channel for the following setup steps
 
 ## Selfhosting Setup (for Railway)
 
