@@ -85,6 +85,28 @@ export function compareScores(challengerScore, responderScore, responderUsername
     ? (responder300 > challenger300 ? responderName : (responder300 < challenger300 ? challengerUsername : 'Tie'))
     : ppWinner;
 
+  // Per-stat winner by side (right=responder, left=challenger) — used so own-challenge improvements show correct stats
+  const statWinners = [
+    'tie',
+    responderPP > challengerPP ? 'right' : responderPP < challengerPP ? 'left' : 'tie',
+    responderAccPct > challengerAccPct ? 'right' : responderAccPct < challengerAccPct ? 'left' : 'tie',
+    responderCombo > challengerCombo ? 'right' : responderCombo < challengerCombo ? 'left' : 'tie',
+    responderScoreValue > challengerScoreValue ? 'right' : responderScoreValue < challengerScoreValue ? 'left' : 'tie',
+    responderMiss < challengerMiss ? 'right' : responderMiss > challengerMiss ? 'left' : 'tie',
+    responder300 > challenger300 ? 'right' : responder300 < challenger300 ? 'left' : 'tie',
+    responder100 < challenger100 ? 'right' : responder100 > challenger100 ? 'left' : 'tie',
+    responder50 < challenger50 ? 'right' : responder50 > challenger50 ? 'left' : 'tie',
+  ];
+  const fifthKeyIndex = bothPPZero ? 6 : 1;
+  const keyStatIndices = [fifthKeyIndex, 2, 3, 4, 5];
+  let responderWins = 0;
+  let challengerWins = 0;
+  for (const i of keyStatIndices) {
+    if (statWinners[i] === 'right') responderWins++;
+    else if (statWinners[i] === 'left') challengerWins++;
+  }
+  const totalMetrics = responderWins + challengerWins;
+
   let table = '```\n';
   table += 'Stat              | Challenger          | Responder\n';
   table += '------------------|---------------------|-------------------\n';
@@ -100,29 +122,7 @@ export function compareScores(challengerScore, responderScore, responderUsername
   const responderModsFormatted = responderMods.length > 17 ? responderMods.substring(0, 14) + '...' : responderMods;
   table += `Mods              | ${challengerModsFormatted.padStart(17)} | ${responderModsFormatted.padStart(17)}\n`;
   table += '```\n\n';
-
-  let challengerWins = 0;
-  let responderWins = 0;
-  if (fifthMetricWinner !== 'Tie' && same(fifthMetricWinner, challengerUsername)) challengerWins++; else if (fifthMetricWinner !== 'Tie' && same(fifthMetricWinner, responderName)) responderWins++;
-  if (accWinner !== 'Tie' && same(accWinner, challengerUsername)) challengerWins++; else if (accWinner !== 'Tie' && same(accWinner, responderName)) responderWins++;
-  if (comboWinner !== 'Tie' && same(comboWinner, challengerUsername)) challengerWins++; else if (comboWinner !== 'Tie' && same(comboWinner, responderName)) responderWins++;
-  if (scoreWinner !== 'Tie' && same(scoreWinner, challengerUsername)) challengerWins++; else if (scoreWinner !== 'Tie' && same(scoreWinner, responderName)) responderWins++;
-  if (missWinner !== 'Tie' && same(missWinner, challengerUsername)) challengerWins++; else if (missWinner !== 'Tie' && same(missWinner, responderName)) responderWins++;
-
-  const totalMetrics = challengerWins + responderWins;
   table += `**Winner:** ${responderWins > challengerWins ? responderName : responderWins < challengerWins ? challengerUsername : 'Tie'} (${Math.max(responderWins, challengerWins)}/${totalMetrics} stats)\n`;
-
-  const statWinners = [
-    'tie',
-    responderPP > challengerPP ? 'right' : responderPP < challengerPP ? 'left' : 'tie',
-    responderAccPct > challengerAccPct ? 'right' : responderAccPct < challengerAccPct ? 'left' : 'tie',
-    responderCombo > challengerCombo ? 'right' : responderCombo < challengerCombo ? 'left' : 'tie',
-    responderScoreValue > challengerScoreValue ? 'right' : responderScoreValue < challengerScoreValue ? 'left' : 'tie',
-    responderMiss < challengerMiss ? 'right' : responderMiss > challengerMiss ? 'left' : 'tie',
-    responder300 > challenger300 ? 'right' : responder300 < challenger300 ? 'left' : 'tie',
-    responder100 < challenger100 ? 'right' : responder100 > challenger100 ? 'left' : 'tie',
-    responder50 < challenger50 ? 'right' : responder50 > challenger50 ? 'left' : 'tie',
-  ];
 
   return {
     table,
