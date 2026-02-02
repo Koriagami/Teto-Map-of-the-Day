@@ -16,15 +16,9 @@ This document provides comprehensive context about the Teto Bot project for AI a
 
 - **TMOTD (Teto Map of the Day)**: A daily map submission feature where users can submit one map per day to a designated channel. Other users can react with 👍 or 👎. If 4+ 👎 reactions are received, the message is edited to show "voted to be meh".
 
-- **RSC (Respond to Score Challenge)**: A command that allows users to either:
-  - Issue a new challenge using their most recent score
-  - Respond to an existing challenge for a specific beatmap/difficulty
+- **RSC (Respond to Score Challenge)**: Issue or respond to a score challenge. Win = 3+ of 5 key stats. Response posts a comparison card and (X/5 key stats). Champion responding to own challenge: better score → challenge updated; worse → "pretend Teto didn't see that".
 
-- **Challenge**: A competitive system where a player issues a challenge by posting their score on a beatmap. Other players can respond by beating that score. The challenge tracks:
-  - **Challenger**: The current player holding the best score (champion)
-  - **Original Challenger**: The player who first issued the challenge
-  - **Champion**: The player with the best score (can change when someone beats it)
-  - **Uncontested Challenge**: A challenge that was created but never had any responses (challengerUserId === originalChallengerUserId and updatedAt === createdAt)
+- **Challenge**: One challenge per beatmap/difficulty. Tracks current champion (challengerUserId/challengerOsuId/challengerScore). **5 key metrics:** PP (or 300s when both PP are 0), Accuracy, Max Combo, Score, Misses (fewer is better). **Uncontested:** created but no responses (challengerUserId === originalChallengerUserId, updatedAt === createdAt).
 
 - **Operating Channels**: Two separate channels per Discord server:
   - **tmotd**: Channel for daily map submissions
@@ -35,14 +29,7 @@ This document provides comprehensive context about the Teto Bot project for AI a
   - **Uncontested Challenges**: Challenges created in last 30 days with no responses
   - **Defense Streaks**: Longest-held challenges (sorted by time held, top 5)
 
-- **Score Comparison**: When responding to a challenge, the bot compares:
-  - PP (Performance Points)
-  - Accuracy
-  - Max Combo
-  - Score value
-  - Misses (fewer is better)
-  
-  The responder wins if they win 3+ out of 5 metrics. If they win, they become the new champion.
+- **Score Comparison**: 5 key metrics — PP (or 300s when both PP are 0), Accuracy, Max Combo, Score, Misses (fewer is better). Responder wins with 3+ of 5. Card shows stat-by-stat winner; message shows (X/5 key stats). `compareScores()` in index.js; card in card.js.
 
 ### Database Terms
 
@@ -164,12 +151,7 @@ Manually trigger weekly challenges report.
 - Same format as automated weekly report
 
 ### `/rsc` (Respond to Score Challenge)
-Issue or respond to a score challenge.
-- Without parameter: Uses most recent score to issue/respond
-- With `respond_for_map_link`: Responds to challenge for that specific beatmap
-- Requires linked osu! profile
-- If challenge exists: Compares scores and updates champion if responder wins
-- If no challenge: Creates new challenge
+Issue or respond to a score challenge. No link = most recent score; with link = best score for that beatmap. Win = 3+ of 5 key stats (PP or 300s when both 0, Acc, Combo, Score, Misses). Posts comparison card + (X/5 key stats). Champion responding to own: improve → update challenge; fail → keep previous score, "pretend Teto didn't see that".
 
 ### `/teto test` (Admin only)
 UI testing command that simulates the output of other commands without affecting real data.
@@ -190,7 +172,7 @@ The test commands are designed to share infrastructure with real commands:
 **Automatic Updates** (no manual changes needed):
 - Test commands use the same helper functions as real commands:
   - Formatting: `formatPlayerStats()`, `formatPlayerStatsCompact()`, `formatDifficultyLabel()`, `formatStarRating()`, `formatMods()`, `formatBeatmapLink()`, `formatTetoText()`
-  - Data fetching: `getBeatmapsetImageUrl()`, `getMapTitle()`, `getStarRating()`, `getBeatmap()`
+  - Data fetching: `getBeatmapsetImageUrl()`, `getMapTitle()`, `getMapArtist()`, `getStarRating()`, `getBeatmap()`
   - Business logic: `compareScores()`, `createAndPostChallenge()`, `generateWeeklyUpdate()`
   - Embed creation: `createEmbed()`
 - **If you update any helper function, test commands automatically reflect the changes**
@@ -214,15 +196,11 @@ The test commands are designed to share infrastructure with real commands:
    - If challenge exists: Proceeds to response flow
 
 2. **Responding to Challenge**:
-   - Bot fetches responder's score for the challenge beatmap
-   - Compares scores on 5 metrics (PP, Accuracy, Combo, Score, Misses)
-   - If responder wins 3+ metrics: Updates champion, posts comparison
-   - If responder loses: Posts comparison, champion remains
+   - Fetches responder's score; compares on 5 key metrics (PP or 300s when both PP 0, Acc, Combo, Score, Misses).
+   - 3+ wins → new champion (or same champion with better score if self-response). Posts card + (X/5 key stats).
+   - Self-response and fail → no update, "pretend Teto didn't see that".
 
-3. **Score Comparison**:
-   - Creates formatted table showing all stats
-   - Determines winner per metric
-   - Final winner: Player with most metric wins (3+ required to win challenge)
+3. **Score Comparison**: `compareScores()`; card via `drawChallengeCard()`. Labels: artist - map name [difficulty].
 
 ## Weekly Report Logic
 
@@ -237,10 +215,8 @@ The weekly report (`generateWeeklyUpdate`) categorizes challenges:
    - Means: Created but never beaten
 
 3. **Defense Streaks**:
-   - All active challenges where `updatedAt === createdAt` (never changed hands)
-   - Sorted by time held (oldest first = longest defense)
-   - Shows top 5
-   - Format: `**Map Name** [[Difficulty]](link) - <@userId> [Held for X days Y hours]`
+   - Challenges never beaten; sorted by time held (top 5).
+   - Format: `(★X.XX [artist - map name [difficulty]](link)) - <@userId> [Held for X days Y hours]`
 
 ## Environment Variables
 
@@ -285,10 +261,8 @@ osu! API score objects contain:
 - `rank`: Letter grade (S, A, B, etc.)
 
 ### Message Formatting
-- Uses Discord markdown: `**bold**`, `*italic*`, `[text](url)`
-- Code blocks for tables: ` ``` `
-- Mentions: `<@userId>`
-- Channel mentions: `<#channelId>`
+- Difficulty labels: **artist - map name [difficulty]** (getMapArtist, formatDifficultyLabel).
+- Discord markdown: `**bold**`, `[text](url)`, `<@userId>`, `<#channelId>`
 
 ## Deployment
 

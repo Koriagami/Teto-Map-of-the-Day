@@ -4,16 +4,13 @@ Discord bot for submitting and voting on osu! maps.
 
 ## Features
 
-- `/teto setup` (admin) — Set operating channel
-- `/teto link <profile>` — Link Discord to OSU! profile
-- `/teto map submit <maplink> [mods]` — Submit map (once per day)
-- `/teto test <command>` (admin) — Test command UI (trs, tc, rsci, rscr, motd, report)
-- `/rsc [maplink]` — Issue or respond to score challenges
-- `/trs` — Record your unranked scores
-- `/tc` — Look up your scores for the map
-- `/test <maplink>` — Test OSU! API leaderboards
-- Auto reactions (👍/👎) with "meh" message on 4+ dislikes
-- PostgreSQL database with Prisma ORM
+- **TMOTD:** `/teto map submit` — Submit map of the day (once per day, optional mods)
+- **Challenges:** `/rsc [maplink]` — Issue or respond to score challenges. Win = 3+ of 5 key stats (PP or 300s when both PP 0, Accuracy, Max Combo, Score, Misses). Response shows comparison card + X/5 key stats. Champion can respond to own challenge (improve or “pretend Teto didn’t see that”).
+- **Scores:** `/trs` — Record unranked/WIP score; `/tc` — Look up scores for a map
+- **Setup:** `/teto setup` (admin), `/teto link` — Link Discord to OSU! (required for most commands)
+- `/teto test` (admin) — Test UI (trs, tc, rsci, rscr, motd, report, card)
+- Map links shown as **artist - map name [difficulty]**. Auto 👍/👎 with “meh” on 4+ dislikes.
+- PostgreSQL + Prisma
 
 ## Quick Setup
 

@@ -2395,25 +2395,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const helpMessage = `**Teto Bot Commands**
 
 **Map of the Day:**
-• \`/teto map submit\` - Submit your map of the day with optional recommended mods
+• \`/teto map submit\` — Submit your map of the day (optional mods)
 
-**Challenges:**
-• \`/rsc\` - Issue or respond to a score challenge
-  Without link: Uses your most recent score to issue/respond to a challenge
-  With link: Fetches your top score for the beatmap (falls back to most recent if needed) to issue/respond
-  If no challenge exists for the difficulty, a new challenge will be created
+**Challenges (\`/rsc\`):**
+• No link: Use most recent score to issue or respond
+• With link: Use your best score for that beatmap to issue or respond
+• **Win rule:** 5 key stats (PP or 300s when both PP are 0, Accuracy, Max Combo, Score, Misses). Need **3+** to win. Response shows a comparison card and your stat count (X/5).
+• Responding to your own challenge: better score → challenge updated; worse → "pretend Teto didn't see that"
 
 **Score Tracking:**
-• \`/trs\` - Record your most recent unranked/WIP score
-• \`/tc\` - Look up your scores for a map (searches last 20 messages for difficulty link)
+• \`/trs\` — Record your most recent unranked/WIP score
+• \`/tc\` — Look up your scores for a map (uses last 20 messages for link)
 
-**Setup & Configuration:**
-• \`/teto setup\` - Configure bot channels (admin only). Set current channel for TMOTD or Challenges
-• \`/teto link\` - Link your Discord account to your OSU! profile
-• \`/teto test\` - Test command UI (admin only)
-• \`/teto help\` - Show this help message
-
-**Note:** Most commands require linking your OSU! profile first using \`/teto link\``;
+**Setup:**
+• \`/teto setup\` — Set channel for TMOTD or Challenges (admin)
+• \`/teto link\` — Link Discord to OSU! profile (required for most commands)
+• \`/teto test\` — Test command UI (admin)
+• \`/teto help\` — This message`;
 
     return interaction.reply({ 
       embeds: await createEmbed(helpMessage),
