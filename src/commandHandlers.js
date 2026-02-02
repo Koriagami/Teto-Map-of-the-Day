@@ -322,13 +322,13 @@ export async function handleRsc(interaction, ctx) {
     let statusMessage = '';
     if (isOwnChallenge) {
       if (responderWon) {
-        statusMessage = `\n\n🏆 **${displayName} has improved the score! The stakes are higher now!** ${statsLine} 🏆`;
+        statusMessage = `\n\n🏆 **${displayName} has improved the score! The stakes are higher now!** ${statsLine}`;
       } else {
         statusMessage = `\n\n😅 **${displayName} has failed to improve the score. Let's pretend Teto didn't see that...**`;
       }
     } else {
       if (responderWon) {
-        statusMessage = `\n\n🏆 **${displayName} has won the challenge and is now the new champion!** ${statsLine} 🏆`;
+        statusMessage = `\n\n🏆 **${displayName} has won the challenge and is now the new champion!** ${statsLine}`;
       } else {
         statusMessage = `\n\n❌ **${displayName} did not win the challenge.** ${statsLine} The current champion remains.`;
       }

@@ -240,11 +240,11 @@ export async function testRscRespondCommand(interaction, guildId, ctx) {
     let statusMessage;
     if (isOwnChallenge) {
       statusMessage = responderWon
-        ? `\n\n🏆 **${displayName} has improved the score! The stakes are higher now!** ${statsLine} 🏆`
+        ? `\n\n🏆 **${displayName} has improved the score! The stakes are higher now!** ${statsLine}`
         : `\n\n😅 **${displayName} has failed to improve the score. Let's pretend Teto didn't see that...**`;
     } else {
       statusMessage = responderWon
-        ? `\n\n🏆 **${displayName} has won the challenge and is now the new champion!** ${statsLine} 🏆`
+        ? `\n\n🏆 **${displayName} has won the challenge and is now the new champion!** ${statsLine}`
         : `\n\n❌ **${displayName} did not win the challenge.** ${statsLine} The current champion remains.`;
     }
     const messageBeforeImage = `**[TEST MODE]**\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
