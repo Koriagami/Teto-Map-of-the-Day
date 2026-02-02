@@ -449,8 +449,8 @@ function compareScores(challengerScore, responderScore, responderUsername) {
     responderScoreValue > challengerScoreValue ? 'right' : responderScoreValue < challengerScoreValue ? 'left' : 'tie',
     responderMiss < challengerMiss ? 'right' : responderMiss > challengerMiss ? 'left' : 'tie',
     responder300 > challenger300 ? 'right' : responder300 < challenger300 ? 'left' : 'tie',
-    responder100 > challenger100 ? 'right' : responder100 < challenger100 ? 'left' : 'tie',
-    responder50 > challenger50 ? 'right' : responder50 < challenger50 ? 'left' : 'tie',
+    responder100 < challenger100 ? 'right' : responder100 > challenger100 ? 'left' : 'tie', // less is better
+    responder50 < challenger50 ? 'right' : responder50 > challenger50 ? 'left' : 'tie',   // less is better
   ];
 
   return {
