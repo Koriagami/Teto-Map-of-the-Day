@@ -17,7 +17,7 @@
 
 4. **Verify Tables**
    - Railway PostgreSQL dashboard → Data tab
-   - Should see: `server_configs`, `submissions`, `user_associations`, `active_challenges`
+   - Should see: `server_configs`, `submissions`, `user_associations`, `active_challenges`, `local_scores`
 
 ## Troubleshooting
 

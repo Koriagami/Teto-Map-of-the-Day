@@ -52,5 +52,6 @@ PostgreSQL with Prisma:
 - `submissions` — Daily submissions
 - `user_associations` — Discord ↔ OSU links
 - `active_challenges` — Score challenges
+- `local_scores` — Stored unranked/WIP scores (for /trs, /tc)
 
 View data: Railway dashboard or `npm run db:studio`

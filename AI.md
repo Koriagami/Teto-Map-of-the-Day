@@ -29,7 +29,7 @@ This document provides comprehensive context about the Teto Bot project for AI a
   - **Uncontested Challenges**: Challenges created in last 30 days with no responses
   - **Defense Streaks**: Longest-held challenges (sorted by time held, top 5)
 
-- **Score Comparison**: 5 key metrics — PP (or 300s when both PP are 0), Accuracy, Max Combo, Score, Misses (fewer is better). Responder wins with 3+ of 5. Card shows stat-by-stat winner; message shows (X/5 key stats). `compareScores()` in index.js; card in card.js.
+- **Score Comparison**: 5 key metrics — PP (or 300s when both PP are 0), Accuracy, Max Combo, Score, Misses (fewer is better). Responder wins with 3+ of 5. Card shows stat-by-stat winner; message shows (X/5 key stats). `compareScores()` in scoreHelpers.js; card in card.js.
 
 ### Database Terms
 
@@ -55,30 +55,38 @@ This document provides comprehensive context about the Teto Bot project for AI a
 ```
 /
 ├── src/
-│   ├── index.js          # Main bot logic, event handlers, command handlers
+│   ├── index.js           # Entry point: client setup, createEmbed, getOperatingChannel, createAndPostChallenge, context builders, event registration, cron, shutdown
+│   ├── commandHandlers.js # Slash command handlers: /rsc, /tc, /trs, /teto (setup, link, help, test, map submit)
 │   ├── commands.js        # Discord slash command definitions
 │   ├── deploy-commands.js # Command deployment script
-│   ├── db.js             # Database wrapper using Prisma
+│   ├── db.js              # Database wrapper using Prisma
 │   ├── osu-api.js         # osu! API v2 client with OAuth2
+│   ├── helpers.js         # Beatmap link building, formatDifficultyLabel, getBeatmapAndLink
+│   ├── emoji.js           # Emoji caching (initializeEmojis), formatRank, formatMapStatEmoji, formatTetoText
+│   ├── scoreHelpers.js    # Score/challenge/beatmap helpers: compareScores, formatBeatmapLink, getMapTitle, getMapArtist, formatStarRating, formatPlayerStats, isValidScore, getBeatmapStatusName, isScoreSavedOnOsu, extractBeatmapInfoFromMessage, extractOsuProfile, etc.
+│   ├── weeklyUpdate.js    # formatChallengeEntry, calculateTimeHeld, formatChallengeEntryWithDays, generateWeeklyUpdate(guildId, createEmbed)
+│   ├── reactionHandler.js # handleMessageReactionAdd (👎 “meh” on TMOTD/Challenges)
+│   ├── testHandlers.js    # /teto test implementations (trs, tc, rsci, rscr, motd, report, card)
+│   ├── test-mock-data.js  # Mock score/beatmap data for tests
+│   ├── card.js            # drawCardPrototype, drawChallengeCard (canvas)
 │   └── verify-db.js       # Database verification utility
 ├── prisma/
-│   ├── schema.prisma     # Database schema definition
+│   ├── schema.prisma      # Database schema definition
 │   ├── check-migration.js # Pre-start migration check
-│   └── migrations/       # Database migration history
-├── package.json          # Dependencies and scripts
-└── README.md            # User-facing documentation
+│   └── migrations/        # Database migration history
+├── package.json           # Dependencies and scripts
+└── README.md              # User-facing documentation
 ```
 
 ### Key Files
 
 #### `src/index.js`
-Main entry point. Contains:
-- Discord client setup and event handlers
-- Command handlers for `/teto` and `/rsc`
-- Reaction monitoring for 👎 votes
-- Weekly report generation (`generateWeeklyUpdate`)
-- Score comparison logic (`compareScores`)
-- Helper functions for formatting and validation
+Entry point. Contains:
+- Discord client setup, constants (BOT_EMBED_COLOR, PARENT_GUILD_ID), createEmbed, getOperatingChannel, todayString, createAndPostChallenge
+- Context builders: buildRscTcContext(), buildTestContext(), buildTetoContext()
+- Event registration: InteractionCreate (dispatches to handleRsc, handleTc, handleTrs, handleTeto), MessageReactionAdd (handleMessageReactionAdd), ClientReady (initializeEmojis)
+- Cron: weekly update (Saturday 16:00 UTC), daily submission cleanup
+- Graceful shutdown and client.login
 
 #### `src/db.js`
 Database abstraction layer. Exports:
@@ -92,14 +100,27 @@ Database abstraction layer. Exports:
 osu! API v2 client. Handles:
 - OAuth2 token management (client credentials flow)
 - API requests with automatic token refresh
-- Functions: `getUser()`, `getBeatmap()`, `getUserRecentScores()`, `getUserBeatmapScore()`, `extractBeatmapId()`
+- Functions: `getUser()`, `getBeatmap()`, `getUserRecentScores()`, `getUserBeatmapScore()`, `getUserBeatmapScoresAll()`, `extractBeatmapId()`, `extractScoreId()`, `getScoreById()`, `resolveMapOrScoreLink()`
+
+#### `src/commandHandlers.js`
+Slash command handlers (receive interaction + ctx):
+- `handleRsc`, `handleTc`: challenge issue/respond and map scores (ctx from buildRscTcContext)
+- `handleTrs`: record recent score, beatmap status, local save (ctx from buildRscTcContext)
+- `handleTeto`: setup, link, help, test, map submit (ctx from buildTetoContext)
+
+#### `src/scoreHelpers.js`
+Score and beatmap helpers: `compareScores`, `extractScoreValue`, `formatBeatmapLink`, `getMapTitle`, `getMapArtist`, `formatStarRating`, `formatPlayerStats`, `formatPlayerStatsCompact`, `getBeatmapStatusName`, `isScoreSavedOnOsu`, `extractBeatmapInfoFromMessage`, `extractOsuProfile`, etc.
+
+#### `src/weeklyUpdate.js`
+Weekly report: `formatChallengeEntry`, `calculateTimeHeld`, `formatChallengeEntryWithDays`, `generateWeeklyUpdate(guildId, createEmbed)`. Index passes createEmbed and calls it from cron and from test report.
 
 #### `prisma/schema.prisma`
-Database schema with 4 models:
+Database schema with 5 models:
 1. **ServerConfig**: Guild channel settings
 2. **Submission**: Daily map submissions (one per user per day per guild)
 3. **UserAssociation**: Discord-to-osu! profile links
 4. **ActiveChallenge**: Score challenges with champion tracking
+5. **LocalScore**: Stored unranked/WIP scores per guild/user (for /trs and /tc)
 
 ## Database Schema Details
 
@@ -145,17 +166,12 @@ Submit a map for TMOTD (once per day per guild).
 - Posts to TMOTD channel with 👍/👎 reactions
 - Valid mods: EZ, NF, HT, HR, SD, PF, DT, NC, HD, FL, RL, SO, SV2
 
-### `/teto get_c_report` (Admin only)
-Manually trigger weekly challenges report.
-- Posts to Challenges channel
-- Same format as automated weekly report
-
 ### `/rsc` (Respond to Score Challenge)
 Issue or respond to a score challenge. No link = most recent score; with link = best score for that beatmap. Win = 3+ of 5 key stats (PP or 300s when both 0, Acc, Combo, Score, Misses). Posts comparison card + (X/5 key stats). Champion responding to own: improve → update challenge; fail → keep previous score, "pretend Teto didn't see that".
 
 ### `/teto test` (Admin only)
 UI testing command that simulates the output of other commands without affecting real data.
-- Options: `command` (required, choices: `trs`, `tc`, `rsci`, `rscr`, `motd`, `report`)
+- Options: `command` (required, choices: `trs`, `tc`, `rsci`, `rscr`, `motd`, `report`, `card`)
 - Uses mock data from `src/test-mock-data.js` or random real data from database (read-only)
 - **Never modifies database** - purely for UI testing
 - Each option simulates:
@@ -165,6 +181,7 @@ UI testing command that simulates the output of other commands without affecting
   - `rscr`: Challenge responding part of `/rsc` (simple message, not embed)
   - `motd`: `/teto map submit` command
   - `report`: Weekly challenges report (uses real `generateWeeklyUpdate()` function)
+  - `card`: Card prototype (avatar + username + 2 mock plays)
 
 #### Test Commands Infrastructure
 The test commands are designed to share infrastructure with real commands:
@@ -275,20 +292,20 @@ osu! API score objects contain:
 
 When working on this codebase:
 
-1. **Adding new commands**: Update `src/commands.js`, add handler in `src/index.js`, run `npm run deploy-commands`
+1. **Adding new commands**: Update `src/commands.js`, add handler in `src/commandHandlers.js` (and wire in `src/index.js` InteractionCreate), run `npm run deploy-commands`
 
 2. **Database changes**: 
    - Update `prisma/schema.prisma`
    - Run `npm run db:migrate` (creates migration)
    - Test locally before pushing
 
-3. **Modifying challenge logic**: Check `src/index.js` around line 260-530 for `/rsc` handler
+3. **Modifying challenge logic**: `handleRsc` and response flow in `src/commandHandlers.js`; score comparison in `src/scoreHelpers.js` (`compareScores`)
 
-4. **Weekly report changes**: See `generateWeeklyUpdate()` function around line 928
+4. **Weekly report changes**: `src/weeklyUpdate.js` — `generateWeeklyUpdate(guildId, createEmbed)`
 
 5. **API changes**: Modify `src/osu-api.js`, ensure OAuth token handling remains intact
 
-6. **Channel operations**: Use `getOperatingChannel()` helper, check permissions before posting
+6. **Channel operations**: Use `getOperatingChannel()` (in index.js, passed via context), check permissions before posting
 
 ## Notes for AI
 
@@ -297,7 +314,7 @@ When working on this codebase:
 - Guild-specific operations must always filter by `guildId`
 - Score data from osu! API is stored as JSON in database
 - Challenge uniqueness is enforced at database level (unique constraint)
-- Weekly reports split messages if they exceed 2000 characters (Discord limit)
+- Weekly reports and long embeds use createEmbed() which splits content when it exceeds 4096 characters (Discord embed description limit)
 - The bot requires specific Discord intents: Guilds, GuildMessages, MessageContent, GuildMessageReactions
 - Partials are enabled for Message, Reaction, and Channel to handle cached data
 
