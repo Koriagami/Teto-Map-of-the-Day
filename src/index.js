@@ -369,8 +369,12 @@ function formatMods(score) {
   return 'No mods';
 }
 
-// Helper: compare two scores and format comparison table
-// Returns: { table: string, responderWins: number, challengerWins: number, totalMetrics: number }
+// Helper: compare two scores and format comparison table.
+// Score objects must come from osu! API v2 (getUserRecentScores, getUserBeatmapScore, etc.) and include:
+// pp, accuracy (0–1), max_combo, score, statistics: { count_300, count_100, count_50, count_miss }, beatmap, user.
+// Challenge winner: 5 key metrics — PP (or 300s when both PP are 0), Accuracy, Max Combo, Score, Misses.
+// Responder wins the challenge if they win 3 or more of these 5 metrics (responderWins >= 3).
+// Returns: { table: string, responderWins: number, challengerWins: number, totalMetrics: number, statWinners }
 function compareScores(challengerScore, responderScore, responderUsername) {
   // Validate inputs
   if (!challengerScore || !responderScore || typeof challengerScore !== 'object' || typeof responderScore !== 'object') {
@@ -403,23 +407,27 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   const challengerMods = formatMods(challengerScore);
   const responderMods = formatMods(responderScore);
 
-  // Determine winners (only for metrics that count toward final winner)
+  // Fifth metric for challenge: PP normally; when both PP are 0, use 300s so we still have 5 comparable metrics
+  const bothPPZero = challengerPP == 0 && responderPP == 0;
   const ppWinner = responderPP > challengerPP ? responderName : (responderPP < challengerPP ? challengerUsername : 'Tie');
   const accWinner = responderAcc > challengerAcc ? responderName : (responderAcc < challengerAcc ? challengerUsername : 'Tie');
   const comboWinner = responderCombo > challengerCombo ? responderName : (responderCombo < challengerCombo ? challengerUsername : 'Tie');
   const scoreWinner = responderScoreValue > challengerScoreValue ? responderName : (responderScoreValue < challengerScoreValue ? challengerUsername : 'Tie');
   const missWinner = responderMiss < challengerMiss ? responderName : (responderMiss > challengerMiss ? challengerUsername : 'Tie');
+  const fifthMetricWinner = bothPPZero
+    ? (responder300 > challenger300 ? responderName : (responder300 < challenger300 ? challengerUsername : 'Tie'))
+    : ppWinner;
 
   // Format comparison table
   let table = '```\n';
   table += 'Stat              | Challenger          | Responder\n';
   table += '------------------|---------------------|-------------------\n';
-  table += `PP                | ${challengerPP.toFixed(2).padStart(17)} ${responderPP < challengerPP ? '🏆' : ''} | ${responderPP.toFixed(2).padStart(17)} ${responderPP > challengerPP ? '🏆' : ''}\n`;
+  table += `PP                | ${challengerPP.toFixed(2).padStart(17)} ${!bothPPZero && responderPP < challengerPP ? '🏆' : ''} | ${responderPP.toFixed(2).padStart(17)} ${!bothPPZero && responderPP > challengerPP ? '🏆' : ''}\n`;
   table += `Accuracy          | ${challengerAcc.toFixed(2).padStart(16)}% ${responderAcc < challengerAcc ? '🏆' : ''} | ${responderAcc.toFixed(2).padStart(16)}% ${responderAcc > challengerAcc ? '🏆' : ''}\n`;
   table += `Max Combo         | ${challengerCombo.toString().padStart(17)} ${responderCombo < challengerCombo ? '🏆' : ''} | ${responderCombo.toString().padStart(17)} ${responderCombo > challengerCombo ? '🏆' : ''}\n`;
   table += `Score             | ${challengerScoreValue.toLocaleString().padStart(17)} ${responderScoreValue < challengerScoreValue ? '🏆' : ''} | ${responderScoreValue.toLocaleString().padStart(17)} ${responderScoreValue > challengerScoreValue ? '🏆' : ''}\n`;
   table += `Misses            | ${challengerMiss.toString().padStart(17)} ${responderMiss > challengerMiss ? '🏆' : ''} | ${responderMiss.toString().padStart(17)} ${responderMiss < challengerMiss ? '🏆' : ''}\n`;
-  table += `300s              | ${challenger300.toString().padStart(17)} | ${responder300.toString().padStart(17)}\n`;
+  table += `300s              | ${challenger300.toString().padStart(17)} ${bothPPZero && responder300 < challenger300 ? '🏆' : ''} | ${responder300.toString().padStart(17)} ${bothPPZero && responder300 > challenger300 ? '🏆' : ''}\n`;
   table += `100s              | ${challenger100.toString().padStart(17)} | ${responder100.toString().padStart(17)}\n`;
   table += `50s               | ${challenger50.toString().padStart(17)} | ${responder50.toString().padStart(17)}\n`;
   // Truncate mods if too long (max 17 chars to fit column width)
@@ -428,10 +436,10 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   table += `Mods              | ${challengerModsFormatted.padStart(17)} | ${responderModsFormatted.padStart(17)}\n`;
   table += '```\n\n';
 
-  // Summary (only count metrics with winners: PP, Accuracy, Max Combo, Score, Misses)
+  // Summary: 5 key metrics — PP (or 300s when both PP are 0), Accuracy, Max Combo, Score, Misses. Winner needs 3+ of 5.
   let challengerWins = 0;
   let responderWins = 0;
-  if (ppWinner === challengerUsername) challengerWins++; else if (ppWinner === responderName) responderWins++;
+  if (fifthMetricWinner === challengerUsername) challengerWins++; else if (fifthMetricWinner === responderName) responderWins++;
   if (accWinner === challengerUsername) challengerWins++; else if (accWinner === responderName) responderWins++;
   if (comboWinner === challengerUsername) challengerWins++; else if (comboWinner === responderName) responderWins++;
   if (scoreWinner === challengerUsername) challengerWins++; else if (scoreWinner === responderName) responderWins++;
@@ -1145,9 +1153,10 @@ async function testRscRespondCommand(interaction, guildId) {
     const cardBuffer = await drawChallengeCard(leftUser, rightUser, challengerScore, responderScore, statWinners, loserSide);
     const cardAttachment = new AttachmentBuilder(cardBuffer, { name: 'challenge-card.png' });
 
+    const statsLine = `(${responderWins}/5 key stats)`;
     const statusMessage = responderWon
-      ? `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`
-      : `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
+      ? `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** ${statsLine} 🏆`
+      : `\n\n❌ **${interaction.user.username} did not win the challenge.** ${statsLine} The current champion remains.`;
     const messageBeforeImage = `**[TEST MODE]**\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
     const messageAfterImage = `${statusMessage}`;
 
@@ -1641,11 +1650,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const cardBuffer = await drawChallengeCard(leftUser, rightUser, challengerScore, responderScore, statWinners, loserSide);
       const cardAttachment = new AttachmentBuilder(cardBuffer, { name: 'challenge-card.png' });
 
+      const statsLine = `(${responderWins}/5 key stats)`;
       let statusMessage = '';
       if (responderWon) {
-        statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** 🏆`;
+        statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** ${statsLine} 🏆`;
       } else {
-        statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** The current champion remains.`;
+        statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** ${statsLine} The current champion remains.`;
       }
 
       const messageBeforeImage = `<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
