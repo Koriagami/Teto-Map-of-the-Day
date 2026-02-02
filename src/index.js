@@ -386,24 +386,24 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   const challengerUsername = challengerScore.user?.username || 'Challenger';
   const responderName = responderUsername;
 
-  // Extract stats
-  const challengerPP = challengerScore.pp || 0;
-  const responderPP = responderScore.pp || 0;
-  const challengerAcc = (challengerScore.accuracy || 0) * 100;
-  const responderAcc = (responderScore.accuracy || 0) * 100;
-  const challengerCombo = challengerScore.max_combo || 0;
-  const responderCombo = responderScore.max_combo || 0;
-  const challengerScoreValue = challengerScore.score || 0;
-  const responderScoreValue = responderScore.score || 0;
-  
-  const challenger300 = challengerScore.statistics?.count_300 || 0;
-  const responder300 = responderScore.statistics?.count_300 || 0;
-  const challenger100 = challengerScore.statistics?.count_100 || 0;
-  const responder100 = responderScore.statistics?.count_100 || 0;
-  const challenger50 = challengerScore.statistics?.count_50 || 0;
-  const responder50 = responderScore.statistics?.count_50 || 0;
-  const challengerMiss = challengerScore.statistics?.count_miss || 0;
-  const responderMiss = responderScore.statistics?.count_miss || 0;
+  // Extract stats and coerce to number so API/DB string values compare correctly (e.g. score "2300000" vs 2345678)
+  const challengerPP = Number(challengerScore.pp) || 0;
+  const responderPP = Number(responderScore.pp) || 0;
+  const challengerCombo = Number(challengerScore.max_combo) || 0;
+  const responderCombo = Number(responderScore.max_combo) || 0;
+  const challengerScoreValue = Number(challengerScore.score) || 0;
+  const responderScoreValue = Number(responderScore.score) || 0;
+  const challengerAccPct = (Number(challengerScore.accuracy) || 0) * 100;
+  const responderAccPct = (Number(responderScore.accuracy) || 0) * 100;
+
+  const challenger300 = Number(challengerScore.statistics?.count_300) || 0;
+  const responder300 = Number(responderScore.statistics?.count_300) || 0;
+  const challenger100 = Number(challengerScore.statistics?.count_100) || 0;
+  const responder100 = Number(responderScore.statistics?.count_100) || 0;
+  const challenger50 = Number(challengerScore.statistics?.count_50) || 0;
+  const responder50 = Number(responderScore.statistics?.count_50) || 0;
+  const challengerMiss = Number(challengerScore.statistics?.count_miss) || 0;
+  const responderMiss = Number(responderScore.statistics?.count_miss) || 0;
   
   // Extract mods (for display only, not used in winner calculation)
   const challengerMods = formatMods(challengerScore);
@@ -412,7 +412,7 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   // Fifth metric for challenge: PP normally; when both PP are 0, use 300s so we still have 5 comparable metrics
   const bothPPZero = challengerPP == 0 && responderPP == 0;
   const ppWinner = responderPP > challengerPP ? responderName : (responderPP < challengerPP ? challengerUsername : 'Tie');
-  const accWinner = responderAcc > challengerAcc ? responderName : (responderAcc < challengerAcc ? challengerUsername : 'Tie');
+  const accWinner = responderAccPct > challengerAccPct ? responderName : (responderAccPct < challengerAccPct ? challengerUsername : 'Tie');
   const comboWinner = responderCombo > challengerCombo ? responderName : (responderCombo < challengerCombo ? challengerUsername : 'Tie');
   const scoreWinner = responderScoreValue > challengerScoreValue ? responderName : (responderScoreValue < challengerScoreValue ? challengerUsername : 'Tie');
   const missWinner = responderMiss < challengerMiss ? responderName : (responderMiss > challengerMiss ? challengerUsername : 'Tie');
@@ -425,7 +425,7 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   table += 'Stat              | Challenger          | Responder\n';
   table += '------------------|---------------------|-------------------\n';
   table += `PP                | ${challengerPP.toFixed(2).padStart(17)} ${!bothPPZero && responderPP < challengerPP ? '🏆' : ''} | ${responderPP.toFixed(2).padStart(17)} ${!bothPPZero && responderPP > challengerPP ? '🏆' : ''}\n`;
-  table += `Accuracy          | ${challengerAcc.toFixed(2).padStart(16)}% ${responderAcc < challengerAcc ? '🏆' : ''} | ${responderAcc.toFixed(2).padStart(16)}% ${responderAcc > challengerAcc ? '🏆' : ''}\n`;
+  table += `Accuracy          | ${challengerAccPct.toFixed(2).padStart(16)}% ${responderAccPct < challengerAccPct ? '🏆' : ''} | ${responderAccPct.toFixed(2).padStart(16)}% ${responderAccPct > challengerAccPct ? '🏆' : ''}\n`;
   table += `Max Combo         | ${challengerCombo.toString().padStart(17)} ${responderCombo < challengerCombo ? '🏆' : ''} | ${responderCombo.toString().padStart(17)} ${responderCombo > challengerCombo ? '🏆' : ''}\n`;
   table += `Score             | ${challengerScoreValue.toLocaleString().padStart(17)} ${responderScoreValue < challengerScoreValue ? '🏆' : ''} | ${responderScoreValue.toLocaleString().padStart(17)} ${responderScoreValue > challengerScoreValue ? '🏆' : ''}\n`;
   table += `Misses            | ${challengerMiss.toString().padStart(17)} ${responderMiss > challengerMiss ? '🏆' : ''} | ${responderMiss.toString().padStart(17)} ${responderMiss < challengerMiss ? '🏆' : ''}\n`;
@@ -454,7 +454,7 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   const statWinners = [
     'tie', // Mods
     responderPP > challengerPP ? 'right' : responderPP < challengerPP ? 'left' : 'tie',
-    responderAcc > challengerAcc ? 'right' : responderAcc < challengerAcc ? 'left' : 'tie',
+    responderAccPct > challengerAccPct ? 'right' : responderAccPct < challengerAccPct ? 'left' : 'tie',
     responderCombo > challengerCombo ? 'right' : responderCombo < challengerCombo ? 'left' : 'tie',
     responderScoreValue > challengerScoreValue ? 'right' : responderScoreValue < challengerScoreValue ? 'left' : 'tie',
     responderMiss < challengerMiss ? 'right' : responderMiss > challengerMiss ? 'left' : 'tie',

@@ -224,6 +224,15 @@ export async function handleRsc(interaction, ctx) {
       }
     }
 
+    // When responding without a score link, use the user's best score on the beatmap for comparison
+    // so we compare champion vs best rather than champion vs most recent (which can be worse).
+    if (!respondForMapLink) {
+      const bestOnMap = await ctx.getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
+      if (bestOnMap && ctx.isValidScore(bestOnMap)) {
+        responderScore = bestOnMap;
+      }
+    }
+
     const challengerScore = existingChallenge.challengerScore;
     const challengeDifficulty = existingChallenge.difficulty;
 
