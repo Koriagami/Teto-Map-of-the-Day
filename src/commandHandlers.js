@@ -262,8 +262,14 @@ export async function handleRsc(interaction, ctx) {
     }
 
     const { responderWins, statWinners } = comparisonResult;
-    const responderWon = responderWins >= 3;
+    let responderWon = responderWins >= 3;
     const isOwnChallenge = existingChallenge.challengerUserId === userId;
+    // Own-challenge fallback: if new score has strictly higher full raw score, count as improvement even when metric wins < 3
+    if (isOwnChallenge && !responderWon) {
+      const championScoreValue = Number(ctx.extractScoreValue(existingChallenge.challengerScore)) || 0;
+      const newScoreValue = Number(ctx.extractScoreValue(responderScore)) || 0;
+      if (newScoreValue > championScoreValue) responderWon = true;
+    }
 
     if (responderWon) {
       try {

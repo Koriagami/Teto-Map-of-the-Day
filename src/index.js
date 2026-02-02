@@ -371,6 +371,13 @@ function formatMods(score) {
   return 'No mods';
 }
 
+// Helper: read a stat from score, supporting both API v2 shape (statistics.count_300) and legacy/flat shape (count_300).
+function scoreStat(score, key) {
+  const s = score?.statistics;
+  const v = s?.[key] ?? score?.[key];
+  return Number(v) || 0;
+}
+
 // Helper: compare two scores and format comparison table.
 // Score objects must come from osu! API v2 (getUserRecentScores, getUserBeatmapScore, etc.) and include:
 // pp, accuracy (0–1), max_combo, score, statistics: { count_300, count_100, count_50, count_miss }, beatmap, user.
@@ -383,27 +390,29 @@ function compareScores(challengerScore, responderScore, responderUsername) {
     throw new Error('Invalid score data provided for comparison');
   }
 
-  const challengerUsername = challengerScore.user?.username || 'Challenger';
-  const responderName = responderUsername;
+  const challengerUsername = (challengerScore.user?.username || 'Challenger').toString().trim();
+  const responderName = (responderUsername || '').toString().trim();
+  const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 
-  // Extract stats and coerce to number so API/DB string values compare correctly (e.g. score "2300000" vs 2345678)
+  // Extract stats and coerce to number; support both statistics.* and top-level legacy keys
   const challengerPP = Number(challengerScore.pp) || 0;
   const responderPP = Number(responderScore.pp) || 0;
   const challengerCombo = Number(challengerScore.max_combo) || 0;
   const responderCombo = Number(responderScore.max_combo) || 0;
-  const challengerScoreValue = Number(challengerScore.score) || 0;
-  const responderScoreValue = Number(responderScore.score) || 0;
+  // Compare full raw score value (extractScoreValue handles number vs object shape); never use rounded/display value (e.g. "2.3M")
+  const challengerScoreValue = Number(extractScoreValue(challengerScore)) || 0;
+  const responderScoreValue = Number(extractScoreValue(responderScore)) || 0;
   const challengerAccPct = (Number(challengerScore.accuracy) || 0) * 100;
   const responderAccPct = (Number(responderScore.accuracy) || 0) * 100;
 
-  const challenger300 = Number(challengerScore.statistics?.count_300) || 0;
-  const responder300 = Number(responderScore.statistics?.count_300) || 0;
-  const challenger100 = Number(challengerScore.statistics?.count_100) || 0;
-  const responder100 = Number(responderScore.statistics?.count_100) || 0;
-  const challenger50 = Number(challengerScore.statistics?.count_50) || 0;
-  const responder50 = Number(responderScore.statistics?.count_50) || 0;
-  const challengerMiss = Number(challengerScore.statistics?.count_miss) || 0;
-  const responderMiss = Number(responderScore.statistics?.count_miss) || 0;
+  const challenger300 = scoreStat(challengerScore, 'count_300');
+  const responder300 = scoreStat(responderScore, 'count_300');
+  const challenger100 = scoreStat(challengerScore, 'count_100');
+  const responder100 = scoreStat(responderScore, 'count_100');
+  const challenger50 = scoreStat(challengerScore, 'count_50');
+  const responder50 = scoreStat(responderScore, 'count_50');
+  const challengerMiss = scoreStat(challengerScore, 'count_miss');
+  const responderMiss = scoreStat(responderScore, 'count_miss');
   
   // Extract mods (for display only, not used in winner calculation)
   const challengerMods = formatMods(challengerScore);
@@ -439,13 +448,14 @@ function compareScores(challengerScore, responderScore, responderUsername) {
   table += '```\n\n';
 
   // Summary: 5 key metrics — PP (or 300s when both PP are 0), Accuracy, Max Combo, Score, Misses. Winner needs 3+ of 5.
+  // Use case-insensitive name match so own-challenge (osu "luneteo" vs Discord "Luneteo") counts correctly.
   let challengerWins = 0;
   let responderWins = 0;
-  if (fifthMetricWinner === challengerUsername) challengerWins++; else if (fifthMetricWinner === responderName) responderWins++;
-  if (accWinner === challengerUsername) challengerWins++; else if (accWinner === responderName) responderWins++;
-  if (comboWinner === challengerUsername) challengerWins++; else if (comboWinner === responderName) responderWins++;
-  if (scoreWinner === challengerUsername) challengerWins++; else if (scoreWinner === responderName) responderWins++;
-  if (missWinner === challengerUsername) challengerWins++; else if (missWinner === responderName) responderWins++;
+  if (fifthMetricWinner !== 'Tie' && same(fifthMetricWinner, challengerUsername)) challengerWins++; else if (fifthMetricWinner !== 'Tie' && same(fifthMetricWinner, responderName)) responderWins++;
+  if (accWinner !== 'Tie' && same(accWinner, challengerUsername)) challengerWins++; else if (accWinner !== 'Tie' && same(accWinner, responderName)) responderWins++;
+  if (comboWinner !== 'Tie' && same(comboWinner, challengerUsername)) challengerWins++; else if (comboWinner !== 'Tie' && same(comboWinner, responderName)) responderWins++;
+  if (scoreWinner !== 'Tie' && same(scoreWinner, challengerUsername)) challengerWins++; else if (scoreWinner !== 'Tie' && same(scoreWinner, responderName)) responderWins++;
+  if (missWinner !== 'Tie' && same(missWinner, challengerUsername)) challengerWins++; else if (missWinner !== 'Tie' && same(missWinner, responderName)) responderWins++;
 
   const totalMetrics = challengerWins + responderWins; // Ties don't count
   table += `**Winner:** ${responderWins > challengerWins ? responderName : responderWins < challengerWins ? challengerUsername : 'Tie'} (${Math.max(responderWins, challengerWins)}/${totalMetrics} stats)`;
@@ -1362,6 +1372,7 @@ function buildRscTcContext() {
     activeChallenges,
     createAndPostChallenge,
     compareScores,
+    extractScoreValue,
     formatBeatmapLink,
     drawChallengeCard,
     getMapTitle,
