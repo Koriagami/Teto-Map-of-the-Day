@@ -11,7 +11,7 @@ import {
 } from 'discord.js';
 import cron from 'node-cron';
 import { commands } from './commands.js';
-import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap } from './osu-api.js';
+import { extractBeatmapId, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser, getBeatmap, resolveMapOrScoreLink } from './osu-api.js';
 import { serverConfig as dbServerConfig, submissions, associations, activeChallenges, localScores, disconnect, prisma } from './db.js';
 import { mockScore, mockScoreSingleMod, mockChallengerScore, createMockResponderScore, mockBeatmap, mockMods, defaultDifficulty, createMockScores, mockRecentPlay1, mockRecentPlay2 } from './test-mock-data.js';
 import { drawCardPrototype, drawChallengeCard } from './card.js';
@@ -855,20 +855,27 @@ function extractBeatmapInfoFromMessage(messageContent) {
   // Sort links by position in message (first to last)
   foundLinks.sort((a, b) => a.linkStart - b.linkStart);
   
-  // Step 2: Find the first link that is a beatmap difficulty link
-  // Only accept short format (/b/) or full beatmapset format (/beatmapsets/{set_id}#{mode}/{beatmap_id})
+  // Step 2: Find the first link that is a beatmap difficulty link or score link
+  // Accept: /b/, /beatmapsets/#osu/, /beatmaps/, /scores/ (score links handled by caller via resolveMapOrScoreLink)
   for (const linkInfo of foundLinks) {
     const url = linkInfo.linkUrl;
     
-    // Check if link is in the accepted formats for /tc
-    // Format 1: Short format - https://osu.ppy.sh/b/{beatmap_id}
+    // Check if link is in an accepted format (difficulty or score)
+    // Format 1: Short - https://osu.ppy.sh/b/{beatmap_id}
     const isShortFormat = /osu\.ppy\.sh\/b\/\d+/.test(url);
-    // Format 2: Full beatmapset format - https://osu.ppy.sh/beatmapsets/{set_id}#{mode}/{beatmap_id}
+    // Format 2: Beatmapset - https://osu.ppy.sh/beatmapsets/{set_id}#{mode}/{beatmap_id}
     const isFullBeatmapsetFormat = /beatmapsets\/\d+#\w+\/\d+/.test(url);
+    // Format 3: Beatmaps - https://osu.ppy.sh/beatmaps/{beatmap_id}
+    const isBeatmapsFormat = /osu\.ppy\.sh\/beatmaps\/\d+/.test(url);
+    // Format 4: Score - https://osu.ppy.sh/scores/{score_id} (extractBeatmapId returns null; caller uses resolveMapOrScoreLink)
+    const isScoreLink = /osu\.ppy\.sh\/scores\/\d+/.test(url);
     
-    // Only process if it's one of the accepted formats
-    if (!isShortFormat && !isFullBeatmapsetFormat) {
-      continue; // Skip links that aren't in the accepted formats
+    if (!isShortFormat && !isFullBeatmapsetFormat && !isBeatmapsFormat && !isScoreLink) {
+      continue;
+    }
+    // For score links we don't have beatmapId from extractBeatmapId; caller must use resolveMapOrScoreLink
+    if (isScoreLink) {
+      continue; // Let the /tc loop fallback handle score links via resolveMapOrScoreLink
     }
     
     const beatmapId = extractBeatmapId(url);
@@ -1462,7 +1469,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
       } else {
-        // With param - check if link contains osu.ppy.sh
+        // With param - check if link contains osu.ppy.sh (map link or score link)
         if (!respondForMapLink.includes('osu.ppy.sh')) {
           return interaction.editReply({ 
           embeds: await createEmbed('Invalid map link. The link must contain "osu.ppy.sh".'),
@@ -1470,16 +1477,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
 
-        beatmapId = extractBeatmapId(respondForMapLink);
-        if (!beatmapId) {
+        const resolved = await resolveMapOrScoreLink(respondForMapLink);
+        if (!resolved || !resolved.beatmapId) {
           return interaction.editReply({ 
-            embeds: await createEmbed('Could not extract beatmap ID from the link.'),
+            embeds: await createEmbed('Could not extract beatmap or score from the link. Use a difficulty link (e.g. osu.ppy.sh/b/123) or a score link (e.g. osu.ppy.sh/scores/123).'),
             ephemeral: true 
           });
         }
+        beatmapId = resolved.beatmapId;
 
-        // Try to get user's best/top score for this beatmap first
-        userScore = await getUserBeatmapScore(beatmapId, osuUserId);
+        // If they pasted a score link and it's their score, use that score directly
+        const scoreUserId = resolved.score?.user_id ?? resolved.score?.user?.id;
+        if (resolved.score && scoreUserId != null && String(scoreUserId) === String(osuUserId)) {
+          userScore = resolved.score;
+        }
+        if (!userScore) {
+          // Try to get user's best/top score for this beatmap first
+          userScore = await getUserBeatmapScore(beatmapId, osuUserId);
+        }
         
         // If best score fetch failed, fallback to most recent score
         if (!userScore) {
@@ -1511,7 +1526,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
 
-        difficulty = userScore.beatmap.version;
+        // Ensure score has beatmap (e.g. when from score link, API may return only beatmap_id)
+        if (!userScore.beatmap && beatmapId) {
+          try {
+            const beatmapData = await getBeatmap(beatmapId);
+            if (beatmapData) userScore.beatmap = beatmapData;
+          } catch (_) { /* ignore */ }
+        }
+        difficulty = userScore.beatmap?.version;
+        if (!difficulty && beatmapId) {
+          try {
+            const b = await getBeatmap(beatmapId);
+            difficulty = b?.version ?? 'Unknown';
+          } catch (_) { difficulty = 'Unknown'; }
+        }
 
         // Check if challenge exists
         existingChallenge = await activeChallenges.getByDifficulty(guildId, beatmapId, difficulty);
@@ -1940,11 +1968,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (beatmapInfo) {
           break;
         }
+        // Fallback: support score links and any other osu.ppy.sh link (e.g. /beatmaps/ in wrong order, or score link)
+        const anyOsuLinkMatch = messageText.match(/https?:\/\/osu\.ppy\.sh\/[^\s\)]+/);
+        if (anyOsuLinkMatch) {
+          const resolved = await resolveMapOrScoreLink(anyOsuLinkMatch[0]);
+          if (resolved?.beatmapId) {
+            beatmapInfo = {
+              beatmapId: resolved.beatmapId,
+              difficulty: resolved.score?.beatmap?.version ?? null
+            };
+            break;
+          }
+        }
       }
 
       if (!beatmapInfo) {
         return interaction.editReply({ 
-          embeds: await createEmbed('No difficulty link found in the last 20 messages of this channel.'),
+          embeds: await createEmbed('No difficulty or score link found in the last 20 messages of this channel. Use a map link (e.g. osu.ppy.sh/b/123) or a score link (e.g. osu.ppy.sh/scores/123).'),
           ephemeral: true 
         });
       }
@@ -2494,6 +2534,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!mapLink || !mapLink.includes('osu.ppy.sh')) {
       return interaction.reply({ embeds: await createEmbed("Impossible to submit the map - link doesn't contain OSU! map"), ephemeral: true });
     }
+    // Support both difficulty links and score links
+    const resolved = await resolveMapOrScoreLink(mapLink);
+    const effectiveBeatmapId = resolved?.beatmapId ?? extractBeatmapId(mapLink);
+    if (!effectiveBeatmapId) {
+      return interaction.reply({ embeds: await createEmbed("Could not extract beatmap or score from the link. Use a difficulty link (e.g. osu.ppy.sh/b/123) or a score link (e.g. osu.ppy.sh/scores/123)."), ephemeral: true });
+    }
     const today = todayString();
     const hasSubmitted = await submissions.hasSubmittedToday(guildId, interaction.user.id, today);
     if (hasSubmitted) {
@@ -2523,19 +2569,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
     let beatmap = null;
     
     try {
-      const beatmapId = extractBeatmapId(mapLink);
-      if (beatmapId) {
-        beatmap = await getBeatmap(beatmapId);
+      if (effectiveBeatmapId) {
+        beatmap = await getBeatmap(effectiveBeatmapId);
         mapName = beatmap?.beatmapset?.title || beatmap?.beatmapset?.title_unicode || null;
         difficultyName = beatmap?.version || null;
         imageUrl = await getBeatmapsetImageUrl(beatmap);
-        
-        // Construct difficulty link
         const beatmapsetId = beatmap?.beatmapset_id || beatmap?.beatmapset?.id;
-        if (beatmapsetId && beatmapId) {
-          difficultyLink = `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${beatmapId}`;
-        } else if (beatmapId) {
-          difficultyLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
+        if (beatmapsetId && effectiveBeatmapId) {
+          difficultyLink = `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${effectiveBeatmapId}`;
+        } else if (effectiveBeatmapId) {
+          difficultyLink = `https://osu.ppy.sh/beatmaps/${effectiveBeatmapId}`;
         }
       }
     } catch (error) {
@@ -2647,18 +2690,19 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
         }
         
         if (mapLink) {
-          const beatmapId = extractBeatmapId(mapLink);
+          const resolved = await resolveMapOrScoreLink(mapLink);
+          const beatmapId = resolved?.beatmapId ?? extractBeatmapId(mapLink);
           if (beatmapId) {
             beatmap = await getBeatmap(beatmapId);
-            mapName = beatmap?.beatmapset?.title || beatmap?.beatmapset?.title_unicode || null;
-            difficultyName = beatmap?.version || null;
-            
-            // Construct difficulty link
-            const beatmapsetId = beatmap?.beatmapset_id || beatmap?.beatmapset?.id;
-            if (beatmapsetId && beatmapId) {
-              difficultyLink = `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${beatmapId}`;
-            } else if (beatmapId) {
-              difficultyLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
+            if (beatmap) {
+              mapName = beatmap?.beatmapset?.title || beatmap?.beatmapset?.title_unicode || null;
+              difficultyName = beatmap?.version || null;
+              const beatmapsetId = beatmap?.beatmapset_id || beatmap?.beatmapset?.id;
+              if (beatmapsetId && beatmapId) {
+                difficultyLink = `https://osu.ppy.sh/beatmapsets/${beatmapsetId}#osu/${beatmapId}`;
+              } else if (beatmapId) {
+                difficultyLink = `https://osu.ppy.sh/beatmaps/${beatmapId}`;
+              }
             }
           }
         }

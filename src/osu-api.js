@@ -92,6 +92,18 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 /**
+ * Extract score ID from osu.ppy.sh score URL
+ * Supports: https://osu.ppy.sh/scores/6153189694
+ * @param {string} url - URL or string containing score link
+ * @returns {string|null} Score ID or null
+ */
+function extractScoreId(url) {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/osu\.ppy\.sh\/scores\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+/**
  * Extract beatmap ID (difficulty ID) from osu.ppy.sh URL
  * Note: Beatmap ID is the ID of a specific difficulty, not the beatmapset ID
  * Supports formats like:
@@ -128,6 +140,25 @@ function extractBeatmapId(url) {
   }
 
   return null;
+}
+
+/**
+ * Get a score by its ID (from score link e.g. https://osu.ppy.sh/scores/6153189694)
+ * @param {string} scoreId - The score ID
+ * @returns {Promise<object|null>} Full score object (includes beatmap, user, etc.) or null if not found
+ */
+async function getScoreById(scoreId) {
+  try {
+    const score = await apiRequest(`/scores/${scoreId}`);
+    if (score && typeof score === 'object') {
+      return score;
+    }
+    return null;
+  } catch (error) {
+    const msg = (error?.message || '').toLowerCase();
+    if (msg.includes('404') || msg.includes('not found')) return null;
+    throw error;
+  }
 }
 
 /**
@@ -300,7 +331,27 @@ async function getUser(user, options = {}) {
   }
 }
 
-export { extractBeatmapId, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser };
+/**
+ * Resolve user input that may be either a map/difficulty link or a score link.
+ * Returns beatmap ID and optionally the full score object (when input was a score link).
+ * @param {string} input - URL: map link (b/, beatmaps/, beatmapsets/...#osu/) or score link (scores/ID)
+ * @returns {Promise<{ beatmapId: string, score?: object }|null>} beatmapId always set when resolvable; score set when input was a score link
+ */
+async function resolveMapOrScoreLink(input) {
+  if (!input || !input.includes('osu.ppy.sh')) return null;
+  const scoreId = extractScoreId(input);
+  if (scoreId) {
+    const score = await getScoreById(scoreId);
+    const bid = score?.beatmap_id ?? score?.beatmap?.id;
+    if (!score || bid == null) return null;
+    return { beatmapId: String(bid), score };
+  }
+  const beatmapId = extractBeatmapId(input);
+  if (beatmapId) return { beatmapId };
+  return null;
+}
+
+export { extractBeatmapId, extractScoreId, getScoreById, resolveMapOrScoreLink, getBeatmap, getBeatmapScores, getUserRecentScores, getUserBeatmapScore, getUserBeatmapScoresAll, getUser };
 
 
 

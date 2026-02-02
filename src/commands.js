@@ -67,7 +67,7 @@ const mapSubmit = new SlashCommandBuilder()
           .addStringOption(opt =>
             opt
               .setName('maplink')
-              .setDescription('Link to OSU map')
+              .setDescription('Link to OSU! beatmap or score (e.g. osu.ppy.sh/b/123 or osu.ppy.sh/scores/123)')
               .setRequired(true)
           );
         for (let i = 1; i <= 5; i++) {
@@ -90,7 +90,7 @@ const rscCommand = new SlashCommandBuilder()
   .addStringOption(opt =>
     opt
       .setName('respond_for_map_link')
-      .setDescription('Link to OSU! beatmap to respond to challenge (must contain osu.ppy.sh)')
+      .setDescription('Link to OSU! beatmap or score (e.g. osu.ppy.sh/b/123 or osu.ppy.sh/scores/123)')
       .setRequired(false)
   );
 
