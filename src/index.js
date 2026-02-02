@@ -1115,6 +1115,7 @@ async function testRscRespondCommand(interaction, guildId) {
     const comparisonResult = compareScores(challengerScore, responderScore, interaction.user.username);
     const { responderWins, statWinners } = comparisonResult;
     const responderWon = responderWins >= 3;
+    const isOwnChallenge = challenges.length > 0 && challenges[0].challengerUserId === interaction.user.id;
     const loserSide = responderWon ? 'left' : 'right';
 
     let leftUser = { avatarBuffer: null, username: challengerScore.user?.username || 'Champion' };
@@ -1154,9 +1155,17 @@ async function testRscRespondCommand(interaction, guildId) {
     const cardAttachment = new AttachmentBuilder(cardBuffer, { name: 'challenge-card.png' });
 
     const statsLine = `(${responderWins}/5 key stats)`;
-    const statusMessage = responderWon
-      ? `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** ${statsLine} 🏆`
-      : `\n\n❌ **${interaction.user.username} did not win the challenge.** ${statsLine} The current champion remains.`;
+    const displayName = interaction.user.username;
+    let statusMessage;
+    if (isOwnChallenge) {
+      statusMessage = responderWon
+        ? `\n\n🏆 **${displayName} has improved the score! The stakes are higher now!** ${statsLine} 🏆`
+        : `\n\n😅 **${displayName} has failed to improve the score. Let's pretend Teto didn't see that...**`;
+    } else {
+      statusMessage = responderWon
+        ? `\n\n🏆 **${displayName} has won the challenge and is now the new champion!** ${statsLine} 🏆`
+        : `\n\n❌ **${displayName} did not win the challenge.** ${statsLine} The current champion remains.`;
+    }
     const messageBeforeImage = `**[TEST MODE]**\n<@${interaction.user.id}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
     const messageAfterImage = `${statusMessage}`;
 
@@ -1604,8 +1613,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       // Check if responder wins (3+ out of 5 metrics) — must know before generating card
       const responderWon = responderWins >= 3;
+      const isOwnChallenge = existingChallenge.challengerUserId === userId;
 
-      // Update challenge if responder becomes new champion
+      // Update challenge: new champion when someone else wins, or new score when holder improves own challenge
       if (responderWon) {
         try {
           await activeChallenges.updateChampion(
@@ -1620,6 +1630,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           console.error('Error updating challenge champion:', error);
         }
       }
+      // When holder responds to own challenge and fails to improve, we keep the previous score (no update)
 
       // Fetch champion and responder osu users for card (avatar + username)
       const championOsuId = existingChallenge.challengerOsuId;
@@ -1651,11 +1662,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const cardAttachment = new AttachmentBuilder(cardBuffer, { name: 'challenge-card.png' });
 
       const statsLine = `(${responderWins}/5 key stats)`;
+      const displayName = interaction.user.username;
       let statusMessage = '';
-      if (responderWon) {
-        statusMessage = `\n\n🏆 **${interaction.user.username} has won the challenge and is now the new champion!** ${statsLine} 🏆`;
+      if (isOwnChallenge) {
+        if (responderWon) {
+          statusMessage = `\n\n🏆 **${displayName} has improved the score! The stakes are higher now!** ${statsLine} 🏆`;
+        } else {
+          statusMessage = `\n\n😅 **${displayName} has failed to improve the score. Let's pretend Teto didn't see that...**`;
+        }
       } else {
-        statusMessage = `\n\n❌ **${interaction.user.username} did not win the challenge.** ${statsLine} The current champion remains.`;
+        if (responderWon) {
+          statusMessage = `\n\n🏆 **${displayName} has won the challenge and is now the new champion!** ${statsLine} 🏆`;
+        } else {
+          statusMessage = `\n\n❌ **${displayName} did not win the challenge.** ${statsLine} The current champion remains.`;
+        }
       }
 
       const messageBeforeImage = `<@${userId}> has responded to the challenge on ${difficultyLink}!\nLet's see who is better!`;
