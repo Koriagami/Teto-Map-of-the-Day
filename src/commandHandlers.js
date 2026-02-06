@@ -227,8 +227,30 @@ export async function handleRsc(interaction, ctx) {
       }
     }
 
-    // When responding without a link we already use the user's most recent score (recentScores[0])
-    // that matches the challenge beatmap — do not overwrite with best score.
+    // With link: use best recorded score (among osu API and local guild scores)
+    if (respondForMapLink && responderScore && ctx.isValidScore(responderScore)) {
+      try {
+        const localRecords = await ctx.localScores.getByBeatmapAndDifficulty(
+          guildId, userId, existingChallenge.beatmapId, existingChallenge.difficulty
+        );
+        let bestScore = responderScore;
+        let bestValue = Number(ctx.extractScoreValue(bestScore)) || 0;
+        for (const record of localRecords || []) {
+          const s = record?.score;
+          if (s && ctx.isValidScore(s)) {
+            const v = Number(ctx.extractScoreValue(s)) || 0;
+            if (v > bestValue) {
+              bestValue = v;
+              bestScore = s;
+            }
+          }
+        }
+        responderScore = bestScore;
+      } catch (e) {
+        console.error('Error merging local scores for respond-with-link:', e);
+      }
+    }
+    // Without link: we already use the user's most recent score (recentScores[0]) for this beatmap — no change.
 
     const challengerScore = existingChallenge.challengerScore;
     const challengeDifficulty = existingChallenge.difficulty;
