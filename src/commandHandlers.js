@@ -205,11 +205,23 @@ export async function handleRsc(interaction, ctx) {
           });
         }
       }
-      if (!responderScore || !ctx.isValidScore(responderScore)) {
+      const hasValidValue = responderScore && Number(ctx.extractScoreValue(responderScore)) > 0;
+      if (!hasValidValue) {
         return interaction.editReply({
           embeds: await ctx.createEmbed('You have no score for this beatmap. Play it first!'),
           ephemeral: true
         });
+      }
+      // Enrich responder score with beatmap from challenge if API omitted it (e.g. /all response)
+      if (responderScore && (!responderScore.beatmap?.version || !responderScore.beatmap?.id)) {
+        if (existingChallenge.challengerScore?.beatmap) {
+          responderScore.beatmap = { ...existingChallenge.challengerScore.beatmap, ...responderScore.beatmap };
+        } else {
+          try {
+            const b = await ctx.getBeatmap(existingChallenge.beatmapId);
+            if (b) responderScore.beatmap = { ...b, ...responderScore.beatmap };
+          } catch (_) {}
+        }
       }
       const apiScoreValue = Number(ctx.extractScoreValue(responderScore)) || 0;
       try {
