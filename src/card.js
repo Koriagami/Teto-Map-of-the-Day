@@ -141,7 +141,7 @@ const MODS_TEXT_OFFSET_FROM_CENTER = Math.round(90 * SCALE_X);
 const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) — darker blue for contrast, neon-style */
 const STAT_LINE_COLOR_LEFT = 'rgb(175, 241, 238)';
-const STAT_LINE_COLOR_RIGHT = 'rgb(215, 92, 182)';
+const STAT_LINE_COLOR_RIGHT = 'rgb(255, 36, 197)';
 /** Outline for stat names (dark grey) and stat values (white-ish grey) */
 const STAT_VALUE_OUTLINE_WIDTH = Math.max(2, Math.round(2 * SCALE_Y));
 const STAT_LABEL_OUTLINE_COLOR = 'rgb(45, 45, 45)';   // stat names
