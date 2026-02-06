@@ -128,6 +128,7 @@ const USERNAME_FONT_SIZE = Math.round(24 * SCALE_Y);
 /** Stats section under username — base values; scaled at draw time to fill card height */
 const STATS_MARGIN_TOP = Math.round(28 * SCALE_Y); // space from player names to first stat title
 const STAT_ROW_HEIGHT_BASE = Math.round(34 * SCALE_Y);
+const STAT_ROW_GAP_EXTRA = 20; // extra px between line of previous stat and stat name of next
 const STAT_LINE_Y_OFFSET_BASE = 12 * SCALE_Y;
 const STAT_NAME_ABOVE_LINE_BASE = 10 * SCALE_Y; // space between stat title and line
 const STAT_LABEL_FONT_SIZE_BASE = Math.round(16 * SCALE_Y);
@@ -365,7 +366,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
   const play2 = scores?.[1];
   if (play1 && play2) {
     const statsAreaHeight = CARD_HEIGHT - statsStartY - STATS_BOTTOM_MARGIN;
-    const rowHeight = statsAreaHeight / STAT_DEFS.length;
+    const rowHeight = (statsAreaHeight - STAT_ROW_GAP_EXTRA * (STAT_DEFS.length - 1)) / STAT_DEFS.length;
     const scale = rowHeight / STAT_ROW_HEIGHT_BASE;
     const labelFontSize = Math.round(STAT_LABEL_FONT_SIZE_BASE * scale);
     const valueFontSize = Math.round(STAT_VALUE_FONT_SIZE_BASE * scale);
@@ -377,13 +378,13 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
     ctx.save();
     for (let i = 0; i < STAT_DEFS.length; i++) {
       const stat = STAT_DEFS[i];
-      const rowY = statsStartY + i * rowHeight;
+      const rowY = statsStartY + i * (rowHeight + STAT_ROW_GAP_EXTRA);
       const lineY = rowY + lineYOffset;
       const winner = winners[i] || 'tie';
       const leftWins = winner === 'left';
       const rightWins = winner === 'right';
 
-      ctx.font = `${labelFontSize}px ${CARD_FONT_FAMILY}`;
+      ctx.font = `bold ${labelFontSize}px ${CARD_FONT_FAMILY}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       const labelY = lineY - nameAboveLine;
@@ -399,7 +400,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         const textRight = stat.getText(play2);
         const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
         const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
-        ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `bolder ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
@@ -428,7 +429,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         ctx.lineTo(CENTER_X + length2, lineY);
         ctx.stroke();
 
-        ctx.font = `bold ${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `bolder ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.fillStyle = STAT_LINE_COLOR_LEFT;
         ctx.textAlign = 'right';
