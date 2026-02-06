@@ -60,7 +60,7 @@ export const CARD_WIDTH = 2000;
 export const CARD_HEIGHT = 2480;
 
 /** Default background fill when no image is found (dark gray) */
-const FALLBACK_BG_COLOR = '#1a1a1a';
+const FALLBACK_BG_COLOR = 'rgb(26, 26, 26)';
 
 /** Background image path: assets/card/backgrounds/teto_bg.png */
 const BACKGROUND_IMAGE_PATH = path.join(process.cwd(), 'assets', 'card', 'backgrounds', 'teto_bg.png');
@@ -91,7 +91,7 @@ const SCALE_Y = CARD_HEIGHT / 800;
 /** Avatar size (diameter when drawn as circle) at center top */
 const AVATAR_SIZE = Math.round(120 * SCALE_Y);
 const AVATAR_BORDER_WIDTH = Math.round(3 * SCALE_Y);
-const AVATAR_BORDER_COLOR = '#a6c4a2';
+const AVATAR_BORDER_COLOR = 'rgb(166, 196, 162)';
 /** Half-transparent grey mask over loser avatar */
 const LOSER_MASK_COLOR = 'rgba(25, 23, 23, 0.82)';
 /** Winning stat row: draw winning side line thicker (values are not highlighted) */
@@ -116,12 +116,12 @@ const STATS_BOTTOM_MARGIN = Math.round(24 * SCALE_Y);
 const MODS_TEXT_OFFSET_FROM_CENTER = Math.round(90 * SCALE_X);
 const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) — darker blue for contrast, neon-style */
-const STAT_LINE_COLOR_LEFT = '#aff1ee';
-const STAT_LINE_COLOR_RIGHT = '#f14fc6';
+const STAT_LINE_COLOR_LEFT = 'rgb(175, 241, 238)';
+const STAT_LINE_COLOR_RIGHT = 'rgb(241, 79, 198)';
 /** Outline for stat names (dark grey) and stat values (white-ish grey) */
 const STAT_VALUE_OUTLINE_WIDTH = Math.max(2, Math.round(2 * SCALE_Y));
-const STAT_LABEL_OUTLINE_COLOR = '#2d2d2d';   // stat names
-const STAT_VALUE_OUTLINE_COLOR = '#e0e0e0';   // stat values
+const STAT_LABEL_OUTLINE_COLOR = 'rgb(45, 45, 45)';   // stat names
+const STAT_VALUE_OUTLINE_COLOR = 'rgb(224, 224, 224)';   // stat values
 
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
 export const MAX_STAT_LINE_LENGTH = Math.round(200 * SCALE_X);
@@ -324,7 +324,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
   ctx.strokeStyle = 'rgba(0,0,0,0.85)';
   ctx.lineWidth = Math.max(2, Math.round(3 * SCALE_Y));
   ctx.lineJoin = 'round';
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = 'rgb(255, 255, 255)';
   const nameY = statsStartY;
   if (leftName) {
     ctx.strokeText(leftName, avatarCenterLeft, nameY);
@@ -368,7 +368,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
       ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
       ctx.lineJoin = 'round';
       ctx.strokeText(stat.label, CENTER_X, labelY);
-      ctx.fillStyle = '#e5e5e5';
+      ctx.fillStyle = 'rgb(174, 231, 144)';
       ctx.fillText(stat.label, CENTER_X, labelY);
 
       if (stat.textOnly) {
