@@ -6,6 +6,27 @@
 import { PermissionsBitField } from 'discord.js';
 import { runTestCommand } from './testHandlers.js';
 
+/** Accept score that has numeric value and beatmap id (from score or context). API sometimes omits beatmap.version. */
+function hasValidScoreValue(ctx, score, beatmapIdFromContext) {
+  if (!score || typeof score !== 'object') return false;
+  const hasValue = typeof ctx.extractScoreValue(score) === 'number';
+  const hasBeatmapId = score.beatmap?.id || beatmapIdFromContext;
+  return !!hasValue && !!hasBeatmapId;
+}
+
+/** Enrich score.beatmap from API when missing or missing version (e.g. /all or recent scores). */
+async function enrichScoreBeatmap(ctx, score, beatmapIdFromContext) {
+  if (!score || typeof score !== 'object') return;
+  const bid = score.beatmap?.id ?? beatmapIdFromContext;
+  if (!bid) return;
+  const needEnrich = !score.beatmap || !score.beatmap.version;
+  if (!needEnrich) return;
+  try {
+    const b = await ctx.getBeatmap(String(bid));
+    if (b) score.beatmap = score.beatmap ? { ...b, ...score.beatmap } : b;
+  } catch (_) { /* ignore */ }
+}
+
 export async function handleRsc(interaction, ctx) {
   await interaction.deferReply({ ephemeral: false });
 
@@ -53,15 +74,21 @@ export async function handleRsc(interaction, ctx) {
 
       userScore = recentScores[0];
 
-      if (!ctx.isValidScore(userScore)) {
+      if (!ctx.isValidScore(userScore) && !hasValidScoreValue(ctx, userScore, null)) {
         return interaction.editReply({
           embeds: await ctx.createEmbed('Invalid score data received from OSU API. Please play a map first and try again.'),
           ephemeral: true
         });
       }
-
-      beatmapId = userScore.beatmap.id.toString();
-      difficulty = userScore.beatmap.version;
+      await enrichScoreBeatmap(ctx, userScore, userScore.beatmap?.id);
+      beatmapId = userScore.beatmap?.id?.toString();
+      difficulty = userScore.beatmap?.version ?? 'Unknown';
+      if (!beatmapId) {
+        return interaction.editReply({
+          embeds: await ctx.createEmbed('Invalid score data received from OSU API. Please play a map first and try again.'),
+          ephemeral: true
+        });
+      }
 
       existingChallenge = await ctx.activeChallenges.getByDifficulty(guildId, beatmapId, difficulty);
 
@@ -127,19 +154,13 @@ export async function handleRsc(interaction, ctx) {
         }
       }
 
-      if (!ctx.isValidScore(userScore)) {
+      if (!ctx.isValidScore(userScore) && !hasValidScoreValue(ctx, userScore, beatmapId)) {
         return interaction.editReply({
           embeds: await ctx.createEmbed('Invalid score data received from OSU API. Please try again.'),
           ephemeral: true
         });
       }
-
-      if (!userScore.beatmap && beatmapId) {
-        try {
-          const beatmapData = await ctx.getBeatmap(beatmapId);
-          if (beatmapData) userScore.beatmap = beatmapData;
-        } catch (_) { /* ignore */ }
-      }
+      await enrichScoreBeatmap(ctx, userScore, beatmapId);
       difficulty = userScore.beatmap?.version;
       if (!difficulty && beatmapId) {
         try {
@@ -165,7 +186,7 @@ export async function handleRsc(interaction, ctx) {
     }
 
     if (!existingChallenge) {
-      if (!userScore || !ctx.isValidScore(userScore)) {
+      if (!userScore || (!ctx.isValidScore(userScore) && !hasValidScoreValue(ctx, userScore, beatmapId))) {
         return interaction.editReply({
           embeds: await ctx.createEmbed('No valid score found. Please try again.'),
           ephemeral: true
@@ -232,7 +253,7 @@ export async function handleRsc(interaction, ctx) {
         let bestLocalValue = apiScoreValue;
         for (const record of localRecords || []) {
           const s = record?.score;
-          if (s && ctx.isValidScore(s)) {
+          if (s && (ctx.isValidScore(s) || hasValidScoreValue(ctx, s, existingChallenge.beatmapId))) {
             const localValue = Number(ctx.extractScoreValue(s)) || 0;
             if (localValue > bestLocalValue) {
               bestLocalValue = localValue;
@@ -720,14 +741,20 @@ export async function handleTrs(interaction, ctx) {
 
     const userScore = recentScores[0];
 
-    if (!ctx.isValidScore(userScore)) {
+    if (!ctx.isValidScore(userScore) && !hasValidScoreValue(ctx, userScore, null)) {
       return interaction.editReply({
         embeds: await ctx.createEmbed('Invalid score data received from OSU API. Please play a map first and try again.'),
         ephemeral: true
       });
     }
-
-    const beatmapId = userScore.beatmap.id.toString();
+    await enrichScoreBeatmap(ctx, userScore, userScore.beatmap?.id);
+    const beatmapId = userScore.beatmap?.id?.toString();
+    if (!beatmapId) {
+      return interaction.editReply({
+        embeds: await ctx.createEmbed('Invalid score data received from OSU API. Please play a map first and try again.'),
+        ephemeral: true
+      });
+    }
     let beatmapStatus = null;
     let beatmapStatusName = 'Unknown';
 
@@ -751,7 +778,7 @@ export async function handleTrs(interaction, ctx) {
     const playerStats = await ctx.formatPlayerStats(userScore);
     const mapTitle = await ctx.getMapTitle(userScore);
     const artist = await ctx.getMapArtist(userScore);
-    const difficulty = userScore.beatmap.version;
+    const difficulty = userScore.beatmap?.version ?? 'Unknown';
     const difficultyLabel = ctx.formatDifficultyLabel(mapTitle, difficulty, artist);
     const starRatingText = await ctx.formatStarRating(userScore);
     const difficultyLink = beatmapLink ? `${starRatingText}[${difficultyLabel}](${beatmapLink})` : `${starRatingText}**${difficultyLabel}**`;

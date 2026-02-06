@@ -152,10 +152,11 @@ async function getOperatingChannel(guildId, guild, channelType) {
   }
 }
 
-// Helper: create and post a challenge announcement
+// Helper: create and post a challenge announcement (caller should enrich score beatmap when from API)
 async function createAndPostChallenge(guildId, userId, osuUserId, userScore, opChannel, interaction) {
-  const beatmapId = userScore.beatmap.id.toString();
-  const difficulty = userScore.beatmap.version;
+  const beatmapId = userScore.beatmap?.id?.toString();
+  const difficulty = userScore.beatmap?.version ?? 'Unknown';
+  if (!beatmapId) throw new Error('createAndPostChallenge: score missing beatmap id');
   
   // Create new challenge
   await activeChallenges.create(
