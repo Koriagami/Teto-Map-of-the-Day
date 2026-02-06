@@ -444,16 +444,15 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
     ctx.restore();
   }
 
-  // Top layer: winner decoration over the winning avatar
+  // Top layer: winner decoration over the winning avatar (full size, no scaling)
   if (loserSide === 'left' || loserSide === 'right') {
     const winnerSide = loserSide === 'left' ? 'right' : 'left';
     const overlayImage = await loadWinnerOverlay(winnerSide);
     if (overlayImage) {
-      const decoSize = AVATAR_SIZE * 0.75; // larger decoration (teto_*_cropped.png)
       const winnerCenterX = winnerSide === 'left' ? avatarCenterLeft : avatarCenterRight;
-      const decoX = winnerCenterX - decoSize / 2;
-      const decoY = avatarY - decoSize / 2;
-      ctx.drawImage(overlayImage, decoX, decoY, decoSize, decoSize);
+      const decoX = winnerCenterX - overlayImage.width / 2;
+      const decoY = avatarY - overlayImage.height;
+      ctx.drawImage(overlayImage, decoX, decoY, overlayImage.width, overlayImage.height);
     }
   }
 
