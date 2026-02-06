@@ -451,7 +451,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
     if (overlayImage) {
       const winnerCenterX = winnerSide === 'left' ? avatarCenterLeft : avatarCenterRight;
       const decoX = winnerCenterX - overlayImage.width / 2;
-      const decoY = avatarY - overlayImage.height;
+      const decoY = avatarY - overlayImage.height + 40;
       ctx.drawImage(overlayImage, decoX, decoY, overlayImage.width, overlayImage.height);
     }
   }
