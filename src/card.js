@@ -68,9 +68,9 @@ const BACKGROUND_IMAGE_PATH = path.join(process.cwd(), 'assets', 'card', 'backgr
 /** Placeholder when no profile picture: assets/card/pfp/no_pfp.png */
 const PLACEHOLDER_PFP_PATH = path.join(process.cwd(), 'assets', 'card', 'pfp', 'no_pfp.png');
 
-/** Winner overlay: left player won → teto_l.png, right player won → teto_r.png (assets/card/decorations) */
-const DECORATION_WINNER_LEFT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_l.png');
-const DECORATION_WINNER_RIGHT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_r.png');
+/** Winner avatar decoration (small): left winner → teto_l_cropped_small.png, right winner → teto_r_cropped_small.png */
+const DECORATION_WINNER_LEFT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_l_cropped_small.png');
+const DECORATION_WINNER_RIGHT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_r_cropped_small.png');
 
 /**
  * Load the background image (teto_bg.png only).
@@ -89,12 +89,12 @@ async function loadBackgroundImage() {
 }
 
 /**
- * Load winner overlay image. loserSide 'left' = right player won → teto_r.png; 'right' = left player won → teto_l.png.
- * @param {'left'|'right'} loserSide - which side lost (opposite side is winner)
+ * Load small winner avatar decoration image.
+ * @param {'left'|'right'} winnerSide - which side won
  * @returns {Promise<import('@napi-rs/canvas').Image | null>}
  */
-async function loadWinnerOverlay(loserSide) {
-  const overlayPath = loserSide === 'left' ? DECORATION_WINNER_RIGHT_PATH : DECORATION_WINNER_LEFT_PATH;
+async function loadWinnerOverlay(winnerSide) {
+  const overlayPath = winnerSide === 'left' ? DECORATION_WINNER_LEFT_PATH : DECORATION_WINNER_RIGHT_PATH;
   if (!fs.existsSync(overlayPath)) return null;
   try {
     return await loadImage(overlayPath);
@@ -441,11 +441,16 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
     ctx.restore();
   }
 
-  // Top layer: winner overlay (teto_l.png if left won, teto_r.png if right won)
+  // Top layer: small winner decoration over the winning avatar
   if (loserSide === 'left' || loserSide === 'right') {
-    const overlayImage = await loadWinnerOverlay(loserSide);
+    const winnerSide = loserSide === 'left' ? 'right' : 'left';
+    const overlayImage = await loadWinnerOverlay(winnerSide);
     if (overlayImage) {
-      ctx.drawImage(overlayImage, 0, 0, CARD_WIDTH, CARD_HEIGHT);
+      const decoSize = AVATAR_SIZE * 0.5; // covers ~25% of avatar area (side length = 50% of diameter)
+      const winnerCenterX = winnerSide === 'left' ? avatarCenterLeft : avatarCenterRight;
+      const decoX = winnerCenterX - decoSize / 2;
+      const decoY = avatarY - decoSize / 2;
+      ctx.drawImage(overlayImage, decoX, decoY, decoSize, decoSize);
     }
   }
 
