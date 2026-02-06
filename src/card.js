@@ -55,21 +55,21 @@ function registerCardFont() {
 
 registerCardFont();
 
-/** Card dimensions */
-export const CARD_WIDTH = 600;
-export const CARD_HEIGHT = 800;
+/** Card dimensions (match teto_bg.png: 2000×2480) */
+export const CARD_WIDTH = 2000;
+export const CARD_HEIGHT = 2480;
 
 /** Default background fill when no image is found (dark gray) */
 const FALLBACK_BG_COLOR = '#1a1a1a';
 
-/** Background image path: assets/card/backgrounds/bubly_bg.png */
-const BACKGROUND_IMAGE_PATH = path.join(process.cwd(), 'assets', 'card', 'backgrounds', 'bubly_bg.png');
+/** Background image path: assets/card/backgrounds/teto_bg.png */
+const BACKGROUND_IMAGE_PATH = path.join(process.cwd(), 'assets', 'card', 'backgrounds', 'teto_bg.png');
 
 /** Placeholder when no profile picture: assets/card/pfp/no_pfp.png */
 const PLACEHOLDER_PFP_PATH = path.join(process.cwd(), 'assets', 'card', 'pfp', 'no_pfp.png');
 
 /**
- * Load the background image (bubly_bg.png only).
+ * Load the background image (teto_bg.png only).
  * @returns {Promise<import('@napi-rs/canvas').Image | null>}
  */
 async function loadBackgroundImage() {
@@ -84,43 +84,47 @@ async function loadBackgroundImage() {
   }
 }
 
+/** Scale factors from original 600×800 design to 2000×2480 */
+const SCALE_X = CARD_WIDTH / 600;
+const SCALE_Y = CARD_HEIGHT / 800;
+
 /** Avatar size (diameter when drawn as circle) at center top */
-const AVATAR_SIZE = 120;
-const AVATAR_BORDER_WIDTH = 3;
+const AVATAR_SIZE = Math.round(120 * SCALE_Y);
+const AVATAR_BORDER_WIDTH = Math.round(3 * SCALE_Y);
 const AVATAR_BORDER_COLOR = '#ffffff';
 /** Half-transparent grey mask over loser avatar */
 const LOSER_MASK_COLOR = 'rgba(25, 23, 23, 0.82)';
 /** Winning stat row: draw winning side line thicker (values are not highlighted) */
 const WINNING_STAT_LINE_WIDTH_MULTIPLIER = 1.6;
-const AVATAR_TOP_MARGIN = 20;
+const AVATAR_TOP_MARGIN = Math.round(20 * SCALE_Y);
 /** Horizontal offset of each avatar center from the card center (left = center - offset, right = center + offset) */
-const AVATAR_OFFSET_FROM_CENTER = 130;
-const USERNAME_MARGIN_TOP = 8;
-const USERNAME_FONT_SIZE = 24;
+const AVATAR_OFFSET_FROM_CENTER = Math.round(130 * SCALE_X);
+const USERNAME_MARGIN_TOP = Math.round(8 * SCALE_Y);
+const USERNAME_FONT_SIZE = Math.round(24 * SCALE_Y);
 
 /** Stats section under username — base values; scaled at draw time to fill card height */
-const STATS_MARGIN_TOP = 28; // space from player names to first stat title
-const STAT_ROW_HEIGHT_BASE = 34;
-const STAT_LINE_Y_OFFSET_BASE = 12;
-const STAT_NAME_ABOVE_LINE_BASE = 10; // space between stat title and line
-const STAT_LABEL_FONT_SIZE_BASE = 16;
-const STAT_VALUE_FONT_SIZE_BASE = 14;
-const STAT_VALUE_MARGIN_BASE = 6;
-const STAT_LINE_STROKE_WIDTH_BASE = 6;
-const STATS_BOTTOM_MARGIN = 24;
+const STATS_MARGIN_TOP = Math.round(28 * SCALE_Y); // space from player names to first stat title
+const STAT_ROW_HEIGHT_BASE = Math.round(34 * SCALE_Y);
+const STAT_LINE_Y_OFFSET_BASE = 12 * SCALE_Y;
+const STAT_NAME_ABOVE_LINE_BASE = 10 * SCALE_Y; // space between stat title and line
+const STAT_LABEL_FONT_SIZE_BASE = Math.round(16 * SCALE_Y);
+const STAT_VALUE_FONT_SIZE_BASE = Math.round(14 * SCALE_Y);
+const STAT_VALUE_MARGIN_BASE = Math.round(6 * SCALE_X);
+const STAT_LINE_STROKE_WIDTH_BASE = 6 * SCALE_Y;
+const STATS_BOTTOM_MARGIN = Math.round(24 * SCALE_Y);
 /** Mods text: horizontal offset from center (closer than bar ends) */
-const MODS_TEXT_OFFSET_FROM_CENTER = 90;
+const MODS_TEXT_OFFSET_FROM_CENTER = Math.round(90 * SCALE_X);
 const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) — darker blue for contrast, neon-style */
 const STAT_LINE_COLOR_LEFT = '#0284c7';
 const STAT_LINE_COLOR_RIGHT = '#f59e0b';
 /** Outline for stat names (dark grey) and stat values (white-ish grey) */
-const STAT_VALUE_OUTLINE_WIDTH = 2;
+const STAT_VALUE_OUTLINE_WIDTH = Math.max(2, Math.round(2 * SCALE_Y));
 const STAT_LABEL_OUTLINE_COLOR = '#2d2d2d';   // stat names
 const STAT_VALUE_OUTLINE_COLOR = '#e0e0e0';   // stat values
 
 /** Maximum length (px) of a stat line when it represents 100% of the scale */
-export const MAX_STAT_LINE_LENGTH = 200;
+export const MAX_STAT_LINE_LENGTH = Math.round(200 * SCALE_X);
 
 /**
  * Calculate proportional line lengths for two stat values so they share a common scale.
@@ -318,7 +322,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = Math.max(2, Math.round(3 * SCALE_Y));
   ctx.lineJoin = 'round';
   ctx.fillStyle = '#ffffff';
   const nameY = statsStartY;
