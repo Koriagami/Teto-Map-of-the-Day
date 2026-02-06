@@ -139,7 +139,7 @@ const AVATAR_TOP_MARGIN = Math.round(20 * SCALE_Y);
 /** Horizontal offset of each avatar center from the card center (left = center - offset, right = center + offset) */
 const AVATAR_OFFSET_FROM_CENTER = Math.round(130 * SCALE_X);
 const USERNAME_MARGIN_TOP = Math.round(8 * SCALE_Y);
-const USERNAME_FONT_SIZE = Math.round(24 * SCALE_Y) + 20;
+const USERNAME_FONT_SIZE = Math.round(24 * SCALE_Y) - 10;
 
 /** Stats section under username — base values; scaled at draw time to fill card height */
 const STATS_MARGIN_TOP = Math.round(28 * SCALE_Y); // space from player names to first stat title
