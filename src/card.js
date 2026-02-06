@@ -123,7 +123,7 @@ const AVATAR_TOP_MARGIN = Math.round(20 * SCALE_Y);
 /** Horizontal offset of each avatar center from the card center (left = center - offset, right = center + offset) */
 const AVATAR_OFFSET_FROM_CENTER = Math.round(130 * SCALE_X);
 const USERNAME_MARGIN_TOP = Math.round(8 * SCALE_Y);
-const USERNAME_FONT_SIZE = Math.round(24 * SCALE_Y);
+const USERNAME_FONT_SIZE = Math.round(24 * SCALE_Y) + 20;
 
 /** Stats section under username — base values; scaled at draw time to fill card height */
 const STATS_MARGIN_TOP = Math.round(28 * SCALE_Y); // space from player names to first stat title
@@ -368,8 +368,8 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
     const statsAreaHeight = CARD_HEIGHT - statsStartY - STATS_BOTTOM_MARGIN;
     const rowHeight = (statsAreaHeight - STAT_ROW_GAP_EXTRA * (STAT_DEFS.length - 1)) / STAT_DEFS.length;
     const scale = rowHeight / STAT_ROW_HEIGHT_BASE;
-    const labelFontSize = Math.round(STAT_LABEL_FONT_SIZE_BASE * scale);
-    const valueFontSize = Math.round(STAT_VALUE_FONT_SIZE_BASE * scale);
+    const labelFontSize = Math.round(STAT_LABEL_FONT_SIZE_BASE * scale) + 20;
+    const valueFontSize = Math.round(STAT_VALUE_FONT_SIZE_BASE * scale) + 20;
     const lineStrokeWidth = Math.max(2, Math.round(STAT_LINE_STROKE_WIDTH_BASE * scale));
     const lineYOffset = STAT_LINE_Y_OFFSET_BASE * scale;
     const nameAboveLine = STAT_NAME_ABOVE_LINE_BASE * scale;
