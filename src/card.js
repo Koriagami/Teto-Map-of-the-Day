@@ -16,9 +16,9 @@ let CARD_FONT_FAMILY = 'CardFont';
 /** Heavier font for stat values; only set when 700-weight bundle is registered. */
 let CARD_FONT_FAMILY_BOLD = null;
 
-/** Bundled fonts: @fontsource/source-sans-3 (woff2). 400 = regular, 600 = semibold for stat values. */
+/** Bundled fonts: @fontsource/source-sans-3 (woff2). 400 = regular, 900 = black for stat values. */
 const BUNDLED_FONT_PATH = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-400-normal.woff2');
-const BUNDLED_FONT_PATH_BOLD = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-600-normal.woff2');
+const BUNDLED_FONT_PATH_BOLD = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-900-normal.woff2');
 
 function registerCardFont() {
   if (GlobalFonts.has('CardFont')) return;
@@ -46,13 +46,13 @@ function registerCardFont() {
       try {
         if (GlobalFonts.registerFromPath(fontPath, 'CardFont')) {
           const boldPath = BUNDLED_FONT_PATH_BOLD;
-          const boldPathCwd = path.join(process.cwd(), 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-600-normal.woff2');
+          const boldPathCwd = path.join(process.cwd(), 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-900-normal.woff2');
           const pathToBold = fs.existsSync(boldPath) ? boldPath : (fs.existsSync(boldPathCwd) ? boldPathCwd : null);
           if (pathToBold) {
             try {
               if (GlobalFonts.registerFromPath(pathToBold, 'CardFontBold')) {
                 CARD_FONT_FAMILY_BOLD = 'CardFontBold';
-                console.log('[card] CardFontBold (600) registered for stat values');
+                console.log('[card] CardFontBold (900) registered for stat values');
               }
             } catch (e) {
               console.warn('[card] Failed to register bold font:', e.message);
