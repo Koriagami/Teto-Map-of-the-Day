@@ -180,55 +180,26 @@ export async function handleRsc(interaction, ctx) {
       });
     }
 
-    let responderScore = userScore;
-    if (!responderScore || responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
-      if (respondForMapLink) {
-        responderScore = await ctx.getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
+    let responderScore;
 
-        if (!responderScore) {
-          const recentScoresData = await ctx.getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
-          const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
-
-          if (!recentScores || recentScores.length === 0) {
-            return interaction.editReply({
-              embeds: await ctx.createEmbed('You have no score for this beatmap. Play it first!'),
-              ephemeral: true
-            });
-          }
-
-          responderScore = recentScores[0];
-
-          if (responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
-            return interaction.editReply({
-              embeds: await ctx.createEmbed('You have no score for this beatmap. Play it first!'),
-              ephemeral: true
-            });
-          }
-        }
-      } else {
+    if (respondForMapLink) {
+      // With link: always use best recorded score (osu API + local) for the challenge beatmap.
+      // Do not use userScore from the link — the link only identifies the map; we fetch best for comparison.
+      responderScore = await ctx.getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
+      if (!responderScore) {
         const recentScoresData = await ctx.getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
         const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
-
-        if (!recentScores || recentScores.length === 0) {
-          return interaction.editReply({
-            embeds: await ctx.createEmbed('You have no recent scores. Play a map first!'),
-            ephemeral: true
-          });
-        }
-
-        responderScore = recentScores[0];
-
-        if (responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
-          return interaction.editReply({
-            embeds: await ctx.createEmbed('Your most recent score is not for this beatmap. Use `/rsc` with the map link to respond to this challenge.'),
-            ephemeral: true
-          });
+        if (recentScores?.length > 0 && recentScores[0].beatmap?.id?.toString() === existingChallenge.beatmapId) {
+          responderScore = recentScores[0];
         }
       }
-    }
-
-    // With link: use best recorded score (among osu API and local guild scores)
-    if (respondForMapLink && responderScore && ctx.isValidScore(responderScore)) {
+      if (!responderScore || !ctx.isValidScore(responderScore)) {
+        return interaction.editReply({
+          embeds: await ctx.createEmbed('You have no score for this beatmap. Play it first!'),
+          ephemeral: true
+        });
+      }
+      // Merge with local guild scores and take the single best by score value
       try {
         const localRecords = await ctx.localScores.getByBeatmapAndDifficulty(
           guildId, userId, existingChallenge.beatmapId, existingChallenge.difficulty
@@ -249,8 +220,24 @@ export async function handleRsc(interaction, ctx) {
       } catch (e) {
         console.error('Error merging local scores for respond-with-link:', e);
       }
+    } else {
+      // Without link: use the user's most recent score (must be for the challenge beatmap)
+      const recentScoresData = await ctx.getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
+      const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
+      if (!recentScores || recentScores.length === 0) {
+        return interaction.editReply({
+          embeds: await ctx.createEmbed('You have no recent scores. Play a map first!'),
+          ephemeral: true
+        });
+      }
+      responderScore = recentScores[0];
+      if (responderScore.beatmap?.id?.toString() !== existingChallenge.beatmapId) {
+        return interaction.editReply({
+          embeds: await ctx.createEmbed('Your most recent score is not for this beatmap. Use `/rsc` with the map link to respond to this challenge.'),
+          ephemeral: true
+        });
+      }
     }
-    // Without link: we already use the user's most recent score (recentScores[0]) for this beatmap — no change.
 
     const challengerScore = existingChallenge.challengerScore;
     const challengeDifficulty = existingChallenge.difficulty;
