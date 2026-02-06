@@ -52,6 +52,7 @@ function registerCardFont() {
             try {
               if (GlobalFonts.registerFromPath(pathToBold, 'CardFontBold')) {
                 CARD_FONT_FAMILY_BOLD = 'CardFontBold';
+                console.log('[card] CardFontBold (600) registered for stat values');
               }
             } catch (e) {
               console.warn('[card] Failed to register bold font:', e.message);
