@@ -128,7 +128,7 @@ const USERNAME_FONT_SIZE = Math.round(24 * SCALE_Y) + 20;
 /** Stats section under username — base values; scaled at draw time to fill card height */
 const STATS_MARGIN_TOP = Math.round(28 * SCALE_Y); // space from player names to first stat title
 const STAT_ROW_HEIGHT_BASE = Math.round(34 * SCALE_Y);
-const STAT_ROW_GAP_EXTRA = 20; // extra px between line of previous stat and stat name of next
+const STAT_ROW_GAP_EXTRA = 40; // extra px between line of previous stat and stat name of next
 const STAT_LINE_Y_OFFSET_BASE = 12 * SCALE_Y;
 const STAT_NAME_ABOVE_LINE_BASE = 10 * SCALE_Y; // space between stat title and line
 const STAT_LABEL_FONT_SIZE_BASE = Math.round(16 * SCALE_Y);
