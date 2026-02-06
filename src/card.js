@@ -68,6 +68,10 @@ const BACKGROUND_IMAGE_PATH = path.join(process.cwd(), 'assets', 'card', 'backgr
 /** Placeholder when no profile picture: assets/card/pfp/no_pfp.png */
 const PLACEHOLDER_PFP_PATH = path.join(process.cwd(), 'assets', 'card', 'pfp', 'no_pfp.png');
 
+/** Winner overlay: left player won → teto_l.png, right player won → teto_r.png (assets/card/decorations) */
+const DECORATION_WINNER_LEFT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_l.png');
+const DECORATION_WINNER_RIGHT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_r.png');
+
 /**
  * Load the background image (teto_bg.png only).
  * @returns {Promise<import('@napi-rs/canvas').Image | null>}
@@ -80,6 +84,22 @@ async function loadBackgroundImage() {
     return await loadImage(BACKGROUND_IMAGE_PATH);
   } catch (e) {
     console.warn('[card] Failed to load background:', e.message);
+    return null;
+  }
+}
+
+/**
+ * Load winner overlay image. loserSide 'left' = right player won → teto_r.png; 'right' = left player won → teto_l.png.
+ * @param {'left'|'right'} loserSide - which side lost (opposite side is winner)
+ * @returns {Promise<import('@napi-rs/canvas').Image | null>}
+ */
+async function loadWinnerOverlay(loserSide) {
+  const overlayPath = loserSide === 'left' ? DECORATION_WINNER_RIGHT_PATH : DECORATION_WINNER_LEFT_PATH;
+  if (!fs.existsSync(overlayPath)) return null;
+  try {
+    return await loadImage(overlayPath);
+  } catch (e) {
+    console.warn('[card] Failed to load winner overlay:', e.message);
     return null;
   }
 }
@@ -419,6 +439,14 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
       }
     }
     ctx.restore();
+  }
+
+  // Top layer: winner overlay (teto_l.png if left won, teto_r.png if right won)
+  if (loserSide === 'left' || loserSide === 'right') {
+    const overlayImage = await loadWinnerOverlay(loserSide);
+    if (overlayImage) {
+      ctx.drawImage(overlayImage, 0, 0, CARD_WIDTH, CARD_HEIGHT);
+    }
   }
 
   return await canvas.encode('png');
