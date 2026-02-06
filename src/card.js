@@ -68,9 +68,9 @@ const BACKGROUND_IMAGE_PATH = path.join(process.cwd(), 'assets', 'card', 'backgr
 /** Placeholder when no profile picture: assets/card/pfp/no_pfp.png */
 const PLACEHOLDER_PFP_PATH = path.join(process.cwd(), 'assets', 'card', 'pfp', 'no_pfp.png');
 
-/** Winner avatar decoration (small): left winner → teto_l_cropped_small.png, right winner → teto_r_cropped_small.png */
-const DECORATION_WINNER_LEFT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_l_cropped_small.png');
-const DECORATION_WINNER_RIGHT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_r_cropped_small.png');
+/** Winner avatar decoration: left winner → teto_l_cropped.png, right winner → teto_r_cropped.png */
+const DECORATION_WINNER_LEFT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_l_cropped.png');
+const DECORATION_WINNER_RIGHT_PATH = path.join(process.cwd(), 'assets', 'card', 'decorations', 'teto_r_cropped.png');
 
 /**
  * Load the background image (teto_bg.png only).
@@ -89,7 +89,7 @@ async function loadBackgroundImage() {
 }
 
 /**
- * Load small winner avatar decoration image.
+ * Load winner avatar decoration image.
  * @param {'left'|'right'} winnerSide - which side won
  * @returns {Promise<import('@napi-rs/canvas').Image | null>}
  */
@@ -107,6 +107,9 @@ async function loadWinnerOverlay(winnerSide) {
 /** Scale factors from original 600×800 design to 2000×2480 */
 const SCALE_X = CARD_WIDTH / 600;
 const SCALE_Y = CARD_HEIGHT / 800;
+
+/** Shift entire card UI down by 10% of card height */
+const UI_TOP_OFFSET = Math.round(CARD_HEIGHT * 0.1);
 
 /** Avatar size (diameter when drawn as circle) at center top */
 const AVATAR_SIZE = Math.round(120 * SCALE_Y);
@@ -286,7 +289,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
     ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
   }
 
-  const avatarY = AVATAR_TOP_MARGIN;
+  const avatarY = AVATAR_TOP_MARGIN + UI_TOP_OFFSET;
   const avatarCenterLeft = CENTER_X - AVATAR_OFFSET_FROM_CENTER;
   const avatarCenterRight = CENTER_X + AVATAR_OFFSET_FROM_CENTER;
   const avatarXLeft = avatarCenterLeft - AVATAR_SIZE / 2;
@@ -441,12 +444,12 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
     ctx.restore();
   }
 
-  // Top layer: small winner decoration over the winning avatar
+  // Top layer: winner decoration over the winning avatar
   if (loserSide === 'left' || loserSide === 'right') {
     const winnerSide = loserSide === 'left' ? 'right' : 'left';
     const overlayImage = await loadWinnerOverlay(winnerSide);
     if (overlayImage) {
-      const decoSize = AVATAR_SIZE * 0.5; // covers ~25% of avatar area (side length = 50% of diameter)
+      const decoSize = AVATAR_SIZE * 0.75; // larger decoration (teto_*_cropped.png)
       const winnerCenterX = winnerSide === 'left' ? avatarCenterLeft : avatarCenterRight;
       const decoX = winnerCenterX - decoSize / 2;
       const decoY = avatarY - decoSize / 2;
