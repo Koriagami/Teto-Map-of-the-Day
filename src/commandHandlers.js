@@ -313,14 +313,8 @@ export async function handleRsc(interaction, ctx) {
     }
 
     const { responderWins, statWinners } = comparisonResult;
-    let responderWon = responderWins >= 3;
+    const responderWon = responderWins >= 3;
     const isOwnChallenge = existingChallenge.challengerUserId === userId;
-    // Own-challenge fallback: if new score has strictly higher full raw score, count as improvement even when metric wins < 3
-    if (isOwnChallenge && !responderWon) {
-      const championScoreValue = Number(ctx.extractScoreValue(existingChallenge.challengerScore)) || 0;
-      const newScoreValue = Number(ctx.extractScoreValue(responderScore)) || 0;
-      if (newScoreValue > championScoreValue) responderWon = true;
-    }
 
     if (responderWon) {
       try {
@@ -934,7 +928,7 @@ export async function handleTeto(interaction, ctx) {
 • No link: Use most recent score to issue or respond
 • With link: Use your best score for that beatmap to issue or respond
 • **Win rule:** 5 key stats (PP or 300s when both PP are 0, Accuracy, Max Combo, Score, Misses). Need **3+** to win. Response shows a comparison card and your stat count (X/5).
-• Responding to your own challenge: better score → challenge updated; worse → "pretend Teto didn't see that"
+• Responding to your own challenge: same 3/5 rule applies to update the challenge; otherwise "pretend Teto didn't see that"
 
 **Score Tracking:**
 • \`/trs\` — Record your most recent unranked/WIP score
