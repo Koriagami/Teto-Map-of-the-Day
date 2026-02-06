@@ -91,7 +91,7 @@ const SCALE_Y = CARD_HEIGHT / 800;
 /** Avatar size (diameter when drawn as circle) at center top */
 const AVATAR_SIZE = Math.round(120 * SCALE_Y);
 const AVATAR_BORDER_WIDTH = Math.round(3 * SCALE_Y);
-const AVATAR_BORDER_COLOR = '#ffffff';
+const AVATAR_BORDER_COLOR = '#a6c4a2';
 /** Half-transparent grey mask over loser avatar */
 const LOSER_MASK_COLOR = 'rgba(25, 23, 23, 0.82)';
 /** Winning stat row: draw winning side line thicker (values are not highlighted) */
@@ -116,8 +116,8 @@ const STATS_BOTTOM_MARGIN = Math.round(24 * SCALE_Y);
 const MODS_TEXT_OFFSET_FROM_CENTER = Math.round(90 * SCALE_X);
 const CENTER_X = CARD_WIDTH / 2;
 /** Colors: score1 line (left), score2 line (right) — darker blue for contrast, neon-style */
-const STAT_LINE_COLOR_LEFT = '#0284c7';
-const STAT_LINE_COLOR_RIGHT = '#f59e0b';
+const STAT_LINE_COLOR_LEFT = '#aff1ee';
+const STAT_LINE_COLOR_RIGHT = '#f14fc6';
 /** Outline for stat names (dark grey) and stat values (white-ish grey) */
 const STAT_VALUE_OUTLINE_WIDTH = Math.max(2, Math.round(2 * SCALE_Y));
 const STAT_LABEL_OUTLINE_COLOR = '#2d2d2d';   // stat names
