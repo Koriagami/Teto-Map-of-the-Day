@@ -13,9 +13,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Font family used for all card text. Must be a registered font — "sans-serif" often doesn't render in headless/Linux (e.g. Railway). */
 let CARD_FONT_FAMILY = 'CardFont';
+/** Heavier font for stat values; only set when 700-weight bundle is registered. */
+let CARD_FONT_FAMILY_BOLD = null;
 
-/** Bundled font: @fontsource/source-sans-3 (woff2). Works on Railway and everywhere. */
+/** Bundled fonts: @fontsource/source-sans-3 (woff2). 400 = regular, 600 = semibold for stat values. */
 const BUNDLED_FONT_PATH = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-400-normal.woff2');
+const BUNDLED_FONT_PATH_BOLD = path.join(__dirname, '..', 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-600-normal.woff2');
 
 function registerCardFont() {
   if (GlobalFonts.has('CardFont')) return;
@@ -42,6 +45,18 @@ function registerCardFont() {
     if (fs.existsSync(fontPath)) {
       try {
         if (GlobalFonts.registerFromPath(fontPath, 'CardFont')) {
+          const boldPath = BUNDLED_FONT_PATH_BOLD;
+          const boldPathCwd = path.join(process.cwd(), 'node_modules', '@fontsource', 'source-sans-3', 'files', 'source-sans-3-latin-600-normal.woff2');
+          const pathToBold = fs.existsSync(boldPath) ? boldPath : (fs.existsSync(boldPathCwd) ? boldPathCwd : null);
+          if (pathToBold) {
+            try {
+              if (GlobalFonts.registerFromPath(pathToBold, 'CardFontBold')) {
+                CARD_FONT_FAMILY_BOLD = 'CardFontBold';
+              }
+            } catch (e) {
+              console.warn('[card] Failed to register bold font:', e.message);
+            }
+          }
           return;
         }
       } catch (e) {
@@ -400,7 +415,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         const textRight = stat.getText(play2);
         const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
         const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
-        ctx.font = `900 ${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY_BOLD || CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.strokeStyle = STAT_LABEL_OUTLINE_COLOR;
         ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
@@ -436,7 +451,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         ctx.lineTo(CENTER_X + length2, lineY);
         ctx.stroke();
 
-        ctx.font = `900 ${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `${valueFontSize}px ${CARD_FONT_FAMILY_BOLD || CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.strokeStyle = STAT_LABEL_OUTLINE_COLOR;
         ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
