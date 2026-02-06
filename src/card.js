@@ -400,7 +400,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         const textRight = stat.getText(play2);
         const textXLeft = CENTER_X - MODS_TEXT_OFFSET_FROM_CENTER;
         const textXRight = CENTER_X + MODS_TEXT_OFFSET_FROM_CENTER;
-        ctx.font = `bolder ${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `900 ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.strokeStyle = STAT_LABEL_OUTLINE_COLOR;
         ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
@@ -436,7 +436,7 @@ async function drawCardInternal(leftUser, rightUser, scores, statWinners = null,
         ctx.lineTo(CENTER_X + length2, lineY);
         ctx.stroke();
 
-        ctx.font = `bolder ${valueFontSize}px ${CARD_FONT_FAMILY}`;
+        ctx.font = `900 ${valueFontSize}px ${CARD_FONT_FAMILY}`;
         ctx.textBaseline = 'middle';
         ctx.strokeStyle = STAT_LABEL_OUTLINE_COLOR;
         ctx.lineWidth = STAT_VALUE_OUTLINE_WIDTH;
