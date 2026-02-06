@@ -183,9 +183,28 @@ export async function handleRsc(interaction, ctx) {
     let responderScore;
 
     if (respondForMapLink) {
-      // With link: pull top score from osu API (GET /beatmaps/{beatmap}/scores/users/{user}).
-      // Then if we have a better score in local DB for this exact difficulty, use that instead.
-      responderScore = await ctx.getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
+      // With link: best score = highest flat score value only. The single-score API endpoint does NOT
+      // return best by score value; use /all and pick max by extractScoreValue. Then use local if better.
+      let apiScores = [];
+      try {
+        apiScores = (await ctx.getUserBeatmapScoresAll(existingChallenge.beatmapId, osuUserId)) || [];
+      } catch (e) {
+        console.warn('getUserBeatmapScoresAll failed:', e?.message);
+      }
+      if (apiScores.length > 0) {
+        const validStrict = apiScores.filter((s) => s && ctx.isValidScore(s));
+        const valid =
+          validStrict.length > 0
+            ? validStrict
+            : apiScores.filter((s) => s && typeof ctx.extractScoreValue(s) === 'number');
+        if (valid.length > 0) {
+          responderScore = valid.reduce((best, s) => {
+            const v = Number(ctx.extractScoreValue(s)) || 0;
+            const bestV = Number(ctx.extractScoreValue(best)) || 0;
+            return v > bestV ? s : best;
+          });
+        }
+      }
       if (!responderScore || !ctx.isValidScore(responderScore)) {
         return interaction.editReply({
           embeds: await ctx.createEmbed('You have no score for this beatmap. Play it first!'),
