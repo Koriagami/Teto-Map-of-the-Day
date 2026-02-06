@@ -183,9 +183,28 @@ export async function handleRsc(interaction, ctx) {
     let responderScore;
 
     if (respondForMapLink) {
-      // With link: always use best recorded score (osu API + local) for the challenge beatmap.
-      // Do not use userScore from the link — the link only identifies the map; we fetch best for comparison.
-      responderScore = await ctx.getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
+      // With link: use best by raw score. Fetch ALL scores on the beatmap from API and pick max by score value
+      // (single-score API can return a different "best" e.g. by mods/position; we want true best by score).
+      let apiScores = [];
+      try {
+        apiScores = await ctx.getUserBeatmapScoresAll(existingChallenge.beatmapId, osuUserId) || [];
+      } catch (e) {
+        console.warn('getUserBeatmapScoresAll failed, falling back to single score:', e?.message);
+      }
+      if (apiScores.length > 0) {
+        apiScores = apiScores.filter((s) => s && ctx.isValidScore(s));
+        if (apiScores.length > 0) {
+          responderScore = apiScores.reduce((best, s) => {
+            const v = Number(ctx.extractScoreValue(s)) || 0;
+            const bestV = Number(ctx.extractScoreValue(best)) || 0;
+            return v > bestV ? s : best;
+          });
+        }
+      }
+      if (!responderScore) {
+        const fallback = await ctx.getUserBeatmapScore(existingChallenge.beatmapId, osuUserId);
+        if (fallback && ctx.isValidScore(fallback)) responderScore = fallback;
+      }
       if (!responderScore) {
         const recentScoresData = await ctx.getUserRecentScores(osuUserId, { limit: 1, include_fails: false });
         const recentScores = Array.isArray(recentScoresData) ? recentScoresData : [];
