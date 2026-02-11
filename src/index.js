@@ -203,11 +203,42 @@ function buildTestContext() {
   };
 }
 
+// Database connection health check with retry
+let dbReady = false;
+async function waitForDatabase(maxRetries = 10, delayMs = 5000) {
+  for (let i = 1; i <= maxRetries; i++) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      console.log('✅ Database connection established');
+      dbReady = true;
+      return true;
+    } catch (error) {
+      console.log(`⏳ Database not ready (attempt ${i}/${maxRetries}): ${error.message.split('\n')[0]}`);
+      if (i < maxRetries) await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  console.error('⚠️  Database unavailable after all retries. Bot will run but DB commands will fail.');
+  return false;
+}
+
+// Handle unhandled promise rejections (prevents silent crashes)
+process.on('unhandledRejection', (reason) => {
+  console.error('[Unhandled Rejection]', reason);
+});
+
 // When ready
 client.once(Events.ClientReady, async () => {
-  console.log(`Logged in as ${client.user.tag}`);
-  const { rankEmojiCache, tetoEmoji } = await initializeEmojis(client, PARENT_GUILD_ID);
-  console.log(`[Emoji] Initialized ${rankEmojiCache?.size || 0} rank emojis and ${tetoEmoji ? 'teto' : 'no teto'} emoji`);
+  console.log(`✅ Logged in as ${client.user.tag} — ${client.guilds.cache.size} guild(s)`);
+  
+  try {
+    const { rankEmojiCache, tetoEmoji } = await initializeEmojis(client, PARENT_GUILD_ID);
+    console.log(`[Emoji] Initialized ${rankEmojiCache?.size || 0} rank emojis and ${tetoEmoji ? 'teto' : 'no teto'} emoji`);
+  } catch (error) {
+    console.error('[Emoji init error]', error.message);
+  }
+  
+  // Try to connect to DB (retries in background, doesn't block bot)
+  await waitForDatabase();
 });
 
 /** Build context for /rsc and /tc handlers (all dependencies passed to commandHandlers.js) */
@@ -377,4 +408,7 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-client.login(TOKEN);
+client.login(TOKEN).catch((error) => {
+  console.error('❌ Failed to login:', error.message);
+  process.exit(1);
+});
