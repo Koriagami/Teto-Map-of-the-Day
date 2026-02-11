@@ -307,20 +307,36 @@ function buildTetoContext() {
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  if (interaction.commandName === 'rsc') {
-    return handleRsc(interaction, buildRscTcContext());
-  }
+  try {
+    if (interaction.commandName === 'rsc') {
+      return await handleRsc(interaction, buildRscTcContext());
+    }
 
-  if (interaction.commandName === 'tc') {
-    return handleTc(interaction, buildRscTcContext());
-  }
+    if (interaction.commandName === 'tc') {
+      return await handleTc(interaction, buildRscTcContext());
+    }
 
-  if (interaction.commandName === 'trs') {
-    return handleTrs(interaction, buildRscTcContext());
-  }
+    if (interaction.commandName === 'trs') {
+      return await handleTrs(interaction, buildRscTcContext());
+    }
 
-  if (interaction.commandName === 'teto') {
-    return handleTeto(interaction, buildTetoContext());
+    if (interaction.commandName === 'teto') {
+      return await handleTeto(interaction, buildTetoContext());
+    }
+  } catch (error) {
+    console.error(`[Command Error] /${interaction.commandName}:`, error.message);
+
+    const errorMessage = 'Teto is off. Looks like something is wrong. Please contact Koriagami';
+
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: errorMessage });
+      } else {
+        await interaction.reply({ content: errorMessage, ephemeral: true });
+      }
+    } catch (replyError) {
+      console.error('[Reply Error]', replyError.message);
+    }
   }
 });
 
