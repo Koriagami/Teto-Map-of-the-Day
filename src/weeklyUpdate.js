@@ -94,8 +94,8 @@ export async function generateWeeklyUpdate(guildId, createEmbed) {
       return null;
     }
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
 
     const newChampions = [];
     const uncontestedChallenges = [];
@@ -109,9 +109,9 @@ export async function generateWeeklyUpdate(guildId, createEmbed) {
       const createdAt = new Date(challenge.createdAt);
       const updatedAt = new Date(challenge.updatedAt);
 
-      if (updatedAt >= thirtyDaysAgo && updatedAt.getTime() !== createdAt.getTime()) {
+      if (updatedAt >= fourteenDaysAgo && updatedAt.getTime() !== createdAt.getTime()) {
         newChampions.push(challenge);
-      } else if (createdAt >= thirtyDaysAgo &&
+      } else if (createdAt >= fourteenDaysAgo &&
         challenge.originalChallengerUserId &&
         challenge.challengerUserId === challenge.originalChallengerUserId &&
         updatedAt.getTime() === createdAt.getTime()) {
