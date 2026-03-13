@@ -137,6 +137,15 @@ export async function generateWeeklyUpdate(guildId, createEmbed) {
     challengesWithTimeHeld.sort((a, b) => b.timeHeld.totalHours - a.timeHeld.totalHours);
     const topDefenseStreaks = challengesWithTimeHeld.slice(0, 5);
 
+    const challengeCountByUser = new Map();
+    for (const { challenge } of challengesWithTimeHeld) {
+      const userId = challenge.challengerUserId;
+      challengeCountByUser.set(userId, (challengeCountByUser.get(userId) || 0) + 1);
+    }
+    const topChallengeHolders = [...challengeCountByUser.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+
     const newChampionsEntries = await Promise.all(newChampions.map(formatChallengeEntry));
     const uncontestedEntries = await Promise.all(uncontestedChallenges.map(formatChallengeEntry));
     const defenseStreakEntries = await Promise.all(
@@ -160,6 +169,16 @@ export async function generateWeeklyUpdate(guildId, createEmbed) {
     if (defenseStreakEntries.length > 0) {
       sections.push('🛡️ **Longest defence streak:**');
       sections.push(...defenseStreakEntries.map(entry => `• ${entry}`));
+      sections.push('');
+    }
+
+    if (topChallengeHolders.length > 0) {
+      const medalEmojis = ['🥇', '🥈', '🥉'];
+      sections.push('👑 **Most challenges held:**');
+      for (let i = 0; i < topChallengeHolders.length; i++) {
+        const [userId, count] = topChallengeHolders[i];
+        sections.push(`${medalEmojis[i]} <@${userId}> - ${count} ${count === 1 ? 'challenge' : 'challenges'}`);
+      }
     }
 
     if (sections.length === 0) {
