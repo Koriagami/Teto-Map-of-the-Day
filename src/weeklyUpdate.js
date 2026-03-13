@@ -152,33 +152,43 @@ export async function generateWeeklyUpdate(guildId, createEmbed) {
       topDefenseStreaks.map(({ challenge, timeHeld }) => formatChallengeEntryWithDays(challenge, timeHeld))
     );
 
+    const emptyState = await formatTetoText('The players have been slacking off lately. Teto has nothing to show here');
+
     const sections = [];
 
+    sections.push('🏆 **New champions:**');
     if (newChampionsEntries.length > 0) {
-      sections.push('🏆 **New champions:**');
       sections.push(...newChampionsEntries.map(entry => `• ${entry}`));
-      sections.push('');
+    } else {
+      sections.push(emptyState);
     }
+    sections.push('');
 
+    sections.push('🫵 **New uncontested challenges:**');
     if (uncontestedEntries.length > 0) {
-      sections.push('🫵 **New uncontested challenges:**');
       sections.push(...uncontestedEntries.map(entry => `• ${entry}`));
-      sections.push('');
+    } else {
+      sections.push(emptyState);
     }
+    sections.push('');
 
+    sections.push('🛡️ **Longest defence streak:**');
     if (defenseStreakEntries.length > 0) {
-      sections.push('🛡️ **Longest defence streak:**');
       sections.push(...defenseStreakEntries.map(entry => `• ${entry}`));
-      sections.push('');
+    } else {
+      sections.push(emptyState);
     }
+    sections.push('');
 
+    sections.push('👑 **Most challenges held:**');
     if (topChallengeHolders.length > 0) {
       const medalEmojis = ['🥇', '🥈', '🥉'];
-      sections.push('👑 **Most challenges held:**');
       for (let i = 0; i < topChallengeHolders.length; i++) {
         const [userId, count] = topChallengeHolders[i];
         sections.push(`${medalEmojis[i]} <@${userId}> - ${count} ${count === 1 ? 'challenge' : 'challenges'}`);
       }
+    } else {
+      sections.push(emptyState);
     }
 
     if (sections.length === 0) {
