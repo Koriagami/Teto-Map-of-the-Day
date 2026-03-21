@@ -8,6 +8,23 @@ import { formatTetoText } from './emoji.js';
 import { getMapTitle, getMapArtist, formatStarRating, formatBeatmapLink } from './scoreHelpers.js';
 import { activeChallenges } from './db.js';
 
+/** Substring that appears in the weekly update header embed (see generateWeeklyUpdate). */
+export const WEEKLY_UPDATE_MARKER = 'TETO WEEKLY UPDATE!';
+
+/**
+ * True if the single latest channel message embed text contains the weekly update header marker.
+ * @param {import('discord.js').Message | null | undefined} latestMessage
+ * @returns {boolean}
+ */
+export function latestMessageIsWeeklyUpdate(latestMessage) {
+  if (!latestMessage?.embeds?.length) return false;
+  for (const embed of latestMessage.embeds) {
+    const description = embed.description;
+    if (description?.includes(WEEKLY_UPDATE_MARKER)) return true;
+  }
+  return false;
+}
+
 /** Format a single challenge entry for the weekly update (no time held). */
 export async function formatChallengeEntry(challenge) {
   try {

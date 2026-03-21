@@ -17,7 +17,10 @@ import { serverConfig as dbServerConfig, submissions, associations, activeChalle
 import { drawChallengeCard } from './card.js';
 import { handleRsc, handleTc, handleTrs, handleTeto } from './commandHandlers.js';
 import { runTestCommand } from './testHandlers.js';
-import { generateWeeklyUpdate as generateWeeklyUpdateFn } from './weeklyUpdate.js';
+import {
+  generateWeeklyUpdate as generateWeeklyUpdateFn,
+  latestMessageIsWeeklyUpdate,
+} from './weeklyUpdate.js';
 import { handleMessageReactionAdd } from './reactionHandler.js';
 
 const client = new Client({
@@ -363,6 +366,23 @@ cron.schedule('0 16 * * 6', async () => {
         if (opChannelResult.error || !opChannelResult.channel) {
           console.log(`Skipping guild ${guildId}: ${opChannelResult.error || 'No challenges channel configured'}`);
           continue;
+        }
+
+        const channel = opChannelResult.channel;
+        if (channel.isTextBased() && 'messages' in channel) {
+          try {
+            const fetched = await channel.messages.fetch({ limit: 1 });
+            const latest = fetched.first();
+            if (latestMessageIsWeeklyUpdate(latest)) {
+              console.log(
+                `Skipping weekly update for guild ${guildId}: latest message looks like the previous weekly update`
+              );
+              continue;
+            }
+          } catch (fetchErr) {
+            console.error(`Weekly update: could not read latest messages for guild ${guildId}:`, fetchErr);
+            // Continue and attempt to post the update
+          }
         }
 
         const messages = await generateWeeklyUpdate(guildId);
